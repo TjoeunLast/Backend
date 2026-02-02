@@ -1,0 +1,106 @@
+plugins {
+    id 'java'
+    // 중요: 4.0.0 -> 3.3.5 (또는 3.x 최신 안정 버전)으로 변경
+    id 'org.springframework.boot' version '3.3.5' 
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+// @RequestParam, @PathVariable 등에서 파라미터 이름을 리플렉션으로 읽을 수 있게 함
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs.add('-parameters')
+}
+
+
+group = 'com.study'
+version = '0.0.1-SNAPSHOT'
+description = 'Demo project for Spring Boot'
+
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // 1. Web Starter (webmvc 대신 web 사용이 표준)
+    // 내장 톰캣, MVC, REST API 기능을 모두 포함합니다.
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    
+    compileOnly 'org.projectlombok:lombok'
+    // developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    
+    // Oracle Driver
+    runtimeOnly 'com.oracle.database.jdbc:ojdbc11'
+    
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Test (개별 설정 대신 starter-test 하나로 통합 권장)
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    
+    // 2. JWT (JJWT) - 0.11.5
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+    // 3. Swagger (SpringDoc)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+	implementation 'org.hashids:hashids:1.0.3'
+	
+	// 4. email
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // 5. Google Auth ID Token verification
+    implementation 'com.google.auth:google-auth-library-oauth2-http:1.19.0'
+    implementation 'com.google.api-client:google-api-client:2.6.0'
+
+	// 5. python 연결을 위한 설정
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+	
+	// 6. 클로바 사용을 위한 의존성 추가
+	implementation 'org.json:json:20231013' // JSON 파싱용
+	implementation 'commons-codec:commons-codec:1.15' // Base64 인코딩용
+
+	// 7. 채팅방 설정을 위한 의존성 추가
+	// WebSocket & STOMP 메시징을 위한 핵심 라이브러리
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    // JSON 데이터 처리를 위한 Jackson (이미 포함되어 있을 확률이 높음)
+	// 8. 알림을 위한 firebase 설정
+	implementation 'com.google.firebase:firebase-admin:9.2.0'
+	
+    // 다양한 조건을 만족시키는 쿼리를 만들기 위한 라이브러리 
+	// 9. Querydsl 라이브러리
+    implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
+    annotationProcessor "com.querydsl:querydsl-apt:5.0.0:jakarta"
+    
+    // 10. Querydsl이 사용할 Jakarta Persistence API
+    annotationProcessor "jakarta.annotation:jakarta.annotation-api"
+    annotationProcessor "jakarta.persistence:jakarta.persistence-api"
+	
+	// 11. AWS S3 를 위한 의존성 추가
+	// Spring Cloud AWS (S3 연동을 위한 핵심 라이브러리)
+    implementation 'io.awspring.cloud:spring-cloud-starter-aws:2.4.4'
+    
+    // 테스트 시 필요한 의존성 (선택 사항)
+    testImplementation 'io.findify:s3mock_2.13:0.2.6'
+    
+    implementation 'net.nurigo:sdk:4.3.0'
+
+
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

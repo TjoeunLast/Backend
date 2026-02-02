@@ -1,0 +1,11 @@
+com.example.project
+├── domain
+│   ├── fridge          # 냉장고(fridge_items, food_categories)
+│   ├── groupbuy        # 공동구매(groupbuy_posts, images, favorites)
+│   ├── chat            # 채팅(chat_rooms, messages, members)
+│   ├── recipe          # 레시피(recipes, ingredients, recommendation_logs)
+│   ├── scan      # 정산(expenses, receipt_scans, receipt_items)
+│   └── recruitment     # 식사 모집(meal_recruitments, recipes)
+├── global              # 공통 설정 (Security, Config, Error, Utils)
+└── infrastructure      # 외부 연동 (Mail, S3, OCR API 등)
+ㅣ--  member          # 회원(users, user_settings, verifications)
