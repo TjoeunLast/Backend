@@ -12,6 +12,7 @@ import com.example.project.global.image.ImageInfo;
 import com.example.project.global.image.ImageUploadResponse;
 import com.example.project.security.token.Token;
 import com.example.project.security.user.Role;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -76,9 +77,11 @@ public class Users implements UserDetails {
     @Column(length = 1)
     private String regflag;
 
+    @JsonIgnore // JSON 응답에서 제외
     @Column(length = 300)
     private String password;
 
+    @JsonIgnore // JSON 변환 시 이 필드를 무시하여 에러 방지
     @OneToMany(mappedBy = "user")
     private List<Token> tokens;
 
