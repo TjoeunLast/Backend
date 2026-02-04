@@ -65,7 +65,8 @@ public class UsersController {
      * GET /api/members/check-nickname?nickname=사용자이름
      */
     @GetMapping("/check-nickname")
-    public ResponseEntity<Map<String, Boolean>> checkNickname(@RequestParam("nickname") String nickname) {
+    public ResponseEntity<Map<String, Boolean>> checkNickname(
+    		@RequestParam("nickname") String nickname) {
         boolean isDuplicated = service.isNicknameDuplicated(nickname);
         // JSON 형태로 반환: {"isDuplicated": true/false}
         return ResponseEntity.ok(Map.of("isDuplicated", isDuplicated));
@@ -96,7 +97,8 @@ public class UsersController {
     // 6) 유저 정보 조회 (프로필 포함)
     // =========================
     @GetMapping("/me")
-    public ResponseEntity<UserResponseDto> getMyInfo(@AuthenticationPrincipal Users user) {
+    public ResponseEntity<UserResponseDto> getMyInfo(
+    		@AuthenticationPrincipal Users user) {
         // 서비스에서 DTO나 Map으로 변환하여 가져옵니다.
     	UserResponseDto userInfo = service.getUserInfo(user.getUserId());
         return ResponseEntity.ok(userInfo);

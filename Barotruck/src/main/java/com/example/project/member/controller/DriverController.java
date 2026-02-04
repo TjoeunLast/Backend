@@ -42,7 +42,8 @@ public class DriverController {
     
  // 차량 번호 중복 확인 API
     @GetMapping("/check-car-num")
-    public ResponseEntity<Boolean> checkCarNum(@RequestParam String carNum) {
+    public ResponseEntity<Boolean> checkCarNum(
+    		@RequestParam("carNum") String carNum) {
         // 중복이면 true, 사용 가능하면 false 반환
         return ResponseEntity.ok(driverService.isCarNumDuplicate(carNum));
     }
