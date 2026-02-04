@@ -13,18 +13,17 @@ import com.example.project.global.image.ImageUploadResponse;
 import com.example.project.security.token.Token;
 import com.example.project.security.user.Role;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -61,10 +60,9 @@ public class Users implements UserDetails {
     @Column(length = 100, unique = true)
     private String email;
 
-    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "is_owner", length = 20)
-    private Role role = Role.USER;
+    private Role role;
 
     @Builder.Default
     @Column(nullable = false)
@@ -87,20 +85,17 @@ public class Users implements UserDetails {
     private String phone;
 
     private Long ratingAvg;
-    //    
-//    private String zipCode;
-//    private String addressBase;
-//    private String addressDetail;
-//    private Integer monthlyFoodBudget;
+
     
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "neighborhood_id")
-//    private Neighborhood neighborhood;
-//    
-//    @Column(name = "onboarding_survey_completed", nullable = false)
-//    @Builder.Default
-//    private Boolean onboardingSurveyCompleted = false;
+ // User.java 내부
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
+    private Shipper shipper;
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
+    private Driver driver;
     
+    
+
  // 기존 코드에 필드 추가
     @Column(name = "fcm_token")
     private String fcmToken; // Flutter 앱에서 발급받아 서버로 보내준 토큰 저장

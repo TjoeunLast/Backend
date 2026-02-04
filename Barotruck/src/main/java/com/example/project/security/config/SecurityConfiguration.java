@@ -38,20 +38,22 @@ public class SecurityConfiguration {
             "/swagger-ui/**",
             "/webjars/**",
             "/swagger-ui.html",
-            "/api/notifications/**", 
             "/index.html", 
             "/login.html", 
             "/register.html",
-            "/api/recipes/**",
-            "/api/receipt/**",
             "/css/**", 
             "/js/**",
+            "/api/recipes/**",
+            "/api/receipt/**",
+            "/api/notifications/**",  // 알림
+            "/api/reports/**", // 신고 
+            "/api/reviews/**", // 리뷰
             "/ws-stomp/**",      // 1. 웹소켓 엔드포인트 추가
             "/pub/**",           // 2. 메시지 발행 경로 추가 (컨트롤러 입구)
-            "/sub/**" ,
+            "/sub/**" ,			
             "/api/chat/room/**",
             "/api/v1/auth/sms",
-            "/api/auth/sms",
+            "/api/auth/sms",	// sms
             
             
     };

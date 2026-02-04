@@ -15,7 +15,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     // 3. 특정 운송건(shipment)과 관련된 모든 신고 조회
     List<Report> findByShipmentId(Long shipmentId);
     
-//    나중에 신고건수가 많이질때 사용 
+//    나중에 신고건수가 많이질때 사용 - 특정 날짜 이후의 PENDING 상태 신고만 보기
 //    @Query("SELECT r FROM Report r WHERE r.status = :status ORDER BY r.createdAt DESC")
 //    List<Report> findReportsByStatusOrderByLatest(@Param("status") String status);
 

@@ -1,5 +1,7 @@
 package com.example.project.security.auth;
 
+import com.example.project.security.user.Role;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,5 +14,5 @@ import lombok.NoArgsConstructor;
 public class AuthenticationRequest {
 
   private String email;
-  String password;
+  private String password;
 }
