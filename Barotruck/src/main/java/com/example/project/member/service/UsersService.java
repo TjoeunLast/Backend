@@ -13,6 +13,8 @@ import com.example.project.global.image.ImageUploadResponse;
 import com.example.project.global.image.S3ImageService;
 import com.example.project.member.domain.Users;
 import com.example.project.member.dto.UserResponseDto;
+import com.example.project.member.repository.DriverRepository;
+import com.example.project.member.repository.ShipperRepository;
 import com.example.project.member.repository.UsersRepository;
 import com.example.project.security.user.ChangePasswordRequest;
 
@@ -24,7 +26,8 @@ public class UsersService {
 
     private final PasswordEncoder passwordEncoder;
     private final UsersRepository repository;
-
+    private final ShipperRepository shipperRepository;
+    private final DriverRepository driverRepository;
     private final S3ImageService s3ImageService;
 
     /**
@@ -154,5 +157,13 @@ public class UsersService {
         return UserResponseDto.from(user);
     }
 
+    
+    
+    
+    
+    
+    
+    
+    
 
 }

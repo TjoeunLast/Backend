@@ -28,14 +28,18 @@ public class Proof {
     @Embedded
     @AttributeOverrides({
         @AttributeOverride(name="imageUrl", column=@Column(name="receipt_img_url")),
-        @AttributeOverride(name="s3Key", column=@Column(name="receipt_s3_key"))
+        @AttributeOverride(name="s3Key", column=@Column(name="receipt_s3_key")),
+        @AttributeOverride(name="originalName", column=@Column(name="receipt_original_name"))
+        
     })
     private ImageInfo receiptImage; // 인수증/물품 사진
 
     @Embedded
     @AttributeOverrides({
         @AttributeOverride(name="imageUrl", column=@Column(name="signature_img_url")),
-        @AttributeOverride(name="s3Key", column=@Column(name="signature_s3_key"))
+        @AttributeOverride(name="s3Key", column=@Column(name="signature_s3_key")),
+        @AttributeOverride(name="originalName", column=@Column(name="signature_original_name"))
+        
     })
     private ImageInfo signatureImage; // 수령인 서명 이미지
 

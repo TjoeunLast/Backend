@@ -14,8 +14,9 @@ import static com.example.project.security.user.Permission.*; // 위에서 만�
 @RequiredArgsConstructor
 public enum Role {
     USER,
+    DRIVER,
     ADMIN,
-    MANAGER
+    SHIPPER
 
 //    @Getter
 //    private final Set<Permission> permissions;

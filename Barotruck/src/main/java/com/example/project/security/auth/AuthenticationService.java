@@ -1,30 +1,32 @@
 package com.example.project.security.auth;
 
-import com.example.project.member.domain.Users;
-import com.example.project.member.repository.UsersRepository;
-import com.example.project.security.config.JwtService;
-import com.example.project.security.token.Token;
-import com.example.project.security.token.TokenRepository;
-import com.example.project.security.token.TokenType;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
+import java.io.IOException;
+import java.sql.SQLException;
+
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
-import java.sql.SQLException;
-import java.util.Map;
-import java.util.Optional;
+import com.example.project.member.domain.Driver;
+import com.example.project.member.domain.Shipper;
+import com.example.project.member.domain.Users;
+import com.example.project.member.repository.DriverRepository;
+import com.example.project.member.repository.ShipperRepository;
+import com.example.project.member.repository.UsersRepository;
+import com.example.project.security.config.JwtService;
+import com.example.project.security.token.Token;
+import com.example.project.security.token.TokenRepository;
+import com.example.project.security.token.TokenType;
+import com.example.project.security.user.Role;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -35,14 +37,17 @@ public class AuthenticationService {
 	private final JwtService jwtService;
 	private final AuthenticationManager authenticationManager;
 	private final RestTemplate restTemplate; // RestTemplate을 빈으로 주입받아 사용
-
+	private final ShipperRepository shipperRepository;
+	private final DriverRepository driversRepository;
 	/**
 	 * 회원가입 처리
 	 */
 	public AuthenticationResponse register(RegisterRequest request) {
 
 		// 전달받은 neighborhoodId로 동네 정보 조회
-
+		if(request.getRole() == Role.ADMIN) {
+			return null;
+		}
 		// 회원 엔티티 생성
 		var user = Users.builder()
 				.nickname(request.getNickname())
@@ -50,7 +55,31 @@ public class AuthenticationService {
 				.password(passwordEncoder.encode(request.getPassword()))
 				.gender(request.getGender())
 				.age(request.getAge())
+				.phone(request.getPhone())
+				.role(request.getRole())
 				.build();
+		
+		// 2. DTO가 존재하는 쪽을 선택하여 저장
+	    if (request.getShipper() != null) {
+	        ShipperDto sDto = request.getShipper();
+	        Shipper shipper = Shipper.builder()
+	                .companyName(sDto.getCompanyName())
+	                .bizRegNum(sDto.getBizRegNum())
+	                .user(user)
+	                .build();
+	        shipperRepository.save(shipper);
+	    } 
+	    else if (request.getDriver() != null) {
+	        DriverDto dDto = request.getDriver();
+	        Driver driver = Driver.builder()
+	                .carNum(dDto.getCarNum())
+	                .carType(dDto.getCarType())
+	                .user(user)
+	                .build();
+	        driversRepository.save(driver);
+	    }
+		
+		
 
 		try {
 			// 사용자 저장 (여기서 유니크 제약조건 위반 시 예외 발생 가능)
