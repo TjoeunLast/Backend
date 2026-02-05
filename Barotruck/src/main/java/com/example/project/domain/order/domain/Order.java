@@ -3,12 +3,17 @@ package com.example.project.domain.order.domain;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.hibernate.annotations.CreationTimestamp;
 
+import com.example.project.domain.review.domain.Report;
+import com.example.project.domain.review.domain.Review;
 import com.example.project.global.neighborhood.Neighborhood; // 지역코드 엔티티
 import com.example.project.member.domain.Users; // 사용자 엔티티
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -17,6 +22,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -121,7 +127,46 @@ public class Order {
     @CreationTimestamp
     @Column(name = "CREATED_AT", updatable = false)
     private LocalDateTime createdAt;
+    
+    
+ // Order.java 내부 추가
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+    private List<Review> reviews = new ArrayList<>();
 
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+    private List<Report> reports = new ArrayList<>();
+
+ // 리뷰 추가 편의 메서드
+    public void addReview(Review review) {
+        this.reviews.add(review);
+        if (review.getOrder() != this) {
+            review.setOrder(this);
+        }
+    }
+
+    // 신고 추가 편의 메서드
+    public void addReport(Report report) {
+        this.reports.add(report);
+        if (report.getOrder() != this) {
+            report.setOrder(this);
+        }
+    }
+    
+    public Long getOpponentId(Long currentUserId) {
+        if (this.user.getUserId().equals(currentUserId)) {
+            // 내가 화주라면 상대방은 차주(driverNo)
+            if (this.driverNo == null) {
+                throw new IllegalStateException("아직 배차된 차주가 없습니다.");
+            }
+            return this.driverNo;
+        } else if (this.driverNo != null && this.driverNo.equals(currentUserId)) {
+            // 내가 차주라면 상대방은 화주(user.userId)
+            return this.user.getUserId();
+        } else {
+            throw new IllegalStateException("해당 오더의 당사자가 아닙니다.");
+        }
+    }
+    
     // 경유지는 별도 도메인으로 구현 예정이므로 여기서는 제외하거나 
     // 일대다(OneToMany) 관계로 추후 추가 가능합니다.
 }

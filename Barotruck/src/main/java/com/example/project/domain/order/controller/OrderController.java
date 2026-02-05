@@ -46,8 +46,8 @@ public class OrderController {
     @PatchMapping("/{orderId}/accept")
     public ResponseEntity<String> accept(
             @PathVariable("orderId") Long orderId, 
-            @RequestParam("driverNo") Long driverNo) {
-        orderService.acceptOrder(orderId, driverNo);
+            @AuthenticationPrincipal Users user) {
+        orderService.acceptOrder(orderId, user.getDriver().getDriverId());
         return ResponseEntity.ok("배차가 성공적으로 완료되었습니다.");
     }
 }

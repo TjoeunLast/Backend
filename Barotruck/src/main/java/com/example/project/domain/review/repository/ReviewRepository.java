@@ -11,17 +11,16 @@ import com.example.project.domain.review.domain.Review;
 
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
+    // 내가 쓴 리뷰 목록
+    List<Review> findByWriter_UserId(Long userId);
 
- // 1. 내가 쓴 리뷰 목록 조회
-    List<Review> findByWriterId(Long writerId);
+    // 특정 사용자에게 달린 리뷰 목록
+    List<Review> findByTarget_UserId(Long userId);
 
-    // 2. 특정 사용자(차주/화주)에게 달린 리뷰 목록 조회
-    List<Review> findByTargetId(Long targetId);
+    // 특정 오더에 대해 이미 리뷰를 썼는지 확인
+    boolean existsByOrder_OrderIdAndWriter_UserId(Long orderId, Long userId);
 
-    // 3. 특정 운송건에 대한 리뷰가 이미 있는지 확인 (중복 등록 방지)
-    boolean existsByShipmentIdAndWriterId(Long shipmentId, Long writerId);
-
-    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.targetId = :targetId")
+    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.target.userId = :targetId")
     Double getAverageRatingByTargetId(@Param("targetId") Long targetId);
-
+    
 }

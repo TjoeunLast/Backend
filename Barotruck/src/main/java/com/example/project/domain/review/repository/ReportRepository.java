@@ -10,13 +10,8 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     List<Report> findByStatus(String status);
 
     // 2. 특정 신고자(유저)가 올린 모든 신고 조회
-    List<Report> findByReporterId(Long reporterId);
-
-    // 3. 특정 운송건(shipment)과 관련된 모든 신고 조회
-    List<Report> findByShipmentId(Long shipmentId);
+    List<Report> findByReporter_UserId(Long userId);
     
-//    나중에 신고건수가 많이질때 사용 - 특정 날짜 이후의 PENDING 상태 신고만 보기
-//    @Query("SELECT r FROM Report r WHERE r.status = :status ORDER BY r.createdAt DESC")
-//    List<Report> findReportsByStatusOrderByLatest(@Param("status") String status);
-
+    // 특정 오더와 관련된 신고 조회 (order 필드의 orderId 접근)
+    List<Report> findByOrder_OrderId(Long orderId);
 }
