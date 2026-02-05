@@ -121,6 +121,23 @@ public class Users implements UserDetails {
         this.profileImage = null;
     }
     
+ // 화주 정보 설정 편의 메서드
+    public void setShipper(Shipper shipper) {
+        this.shipper = shipper;
+        if (shipper != null && shipper.getUser() != this) {
+            shipper.setUser(this);
+        }
+    }
+
+    // 차주 정보 설정 편의 메서드
+    public void setDriver(Driver driver) {
+        this.driver = driver;
+        if (driver != null && driver.getUser() != this) {
+            driver.setUser(this);
+        }
+    }
+    
+    
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority(role.name()));

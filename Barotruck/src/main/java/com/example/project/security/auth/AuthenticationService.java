@@ -67,6 +67,7 @@ public class AuthenticationService {
 	                .bizRegNum(sDto.getBizRegNum())
 	                .user(user)
 	                .build();
+	        user.setShipper(shipper);
 	        shipperRepository.save(shipper);
 	    } 
 	    else if (request.getDriver() != null) {
@@ -76,6 +77,7 @@ public class AuthenticationService {
 	                .carType(dDto.getCarType())
 	                .user(user)
 	                .build();
+	        user.setDriver(driver);
 	        driversRepository.save(driver);
 	    }
 		
