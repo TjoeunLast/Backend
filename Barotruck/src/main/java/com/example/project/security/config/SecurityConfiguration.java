@@ -1,14 +1,12 @@
 package com.example.project.security.config;
 
 
-import static org.springframework.http.HttpMethod.DELETE;
 import static org.springframework.http.HttpMethod.GET;
-import static org.springframework.http.HttpMethod.POST;
-import static org.springframework.http.HttpMethod.PUT;
 import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -76,6 +74,8 @@ public class SecurityConfiguration {
                                 .requestMatchers(GET, "/api/route/**").permitAll()
                                 .requestMatchers("/api/ocr/**").permitAll()
                                 .requestMatchers("/api/**").permitAll()
+                                .requestMatchers(HttpMethod.GET, "/api/notices/**").permitAll() // 공지는 누구나 조회 가능
+                                .requestMatchers("/api/admin/**").hasRole("ADMIN") // 관리자 전용 API
                                 
                                 // ★ 중요: 채팅과 공구 관련 API는 반드시 인증(Token) 필요
                                 // 이렇게 설정해야 @AuthenticationPrincipal에 데이터가 정상적으로 들어옵니다.
