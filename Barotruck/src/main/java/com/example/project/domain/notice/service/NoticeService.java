@@ -32,14 +32,15 @@ public class NoticeService {
     }
 
     public List<NoticeResponse> getAllNotices() {
-        return noticeRepository.findAllWithAdminOrderByPinned().stream()
+        // 리포지토리 메서드명을 앞서 수정한 이름으로 일치시켜야 합니다.
+        return noticeRepository.findAllWithAdminOrderByIsPinnedDescCreatedAtDesc().stream()
                 .map(n -> NoticeResponse.builder()
                         .noticeId(n.getNoticeId())
                         .title(n.getTitle())
                         .content(n.getContent())
                         .isPinned(n.getIsPinned())
-                        // admin이 null일 경우를 대비한 방어 코드
-                        .adminName(n.getAdminName() != null ? n.getAdminName() : "관리자")
+                        // admin 객체에 접근해서 이름을 가져와야 함 (Null 체크 포함)
+                        .adminName(n.getAdmin() != null ? n.getAdmin().getNickname() : "관리자")
                         .createdAt(n.getCreatedAt())
                         .build())
                 .collect(Collectors.toList());
