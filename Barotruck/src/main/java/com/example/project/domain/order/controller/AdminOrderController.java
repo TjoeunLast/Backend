@@ -72,10 +72,11 @@ public class AdminOrderController {
         return ResponseEntity.ok("관리자 권한으로 오더를 강제 취소했습니다.");
     }
     
-    
     @GetMapping("/provinces")
-    public ResponseEntity<Map<String, List<ProvinceStatResponse>>> getProvinceStats() {
-        return ResponseEntity.ok(orderService.getProvinceStatistics());
+    public ResponseEntity<Map<String, List<ProvinceStatResponse>>> getProvinceStats(
+            @RequestParam(name = "period", defaultValue = "month") String period) {
+        // 만약 전체 기간 통계가 필요하다면 Service에서 period가 "all"일 때 처리하도록 로직을 짜는 것이 좋습니다.
+        return ResponseEntity.ok(orderService.getProvinceStatsByPeriod(period));
     }
     
     /**
@@ -87,15 +88,6 @@ public class AdminOrderController {
     }
     
     
-    /**
-     * 기간별(day, week, month) 지역 통계 조회
-     * 예: /api/v1/admin/orders/statistics/provinces?period=week
-     */
-    @GetMapping("/provinces")
-    public ResponseEntity<Map<String, List<ProvinceStatResponse>>> getProvinceStats(
-            @RequestParam(defaultValue = "day") String period) {
-        return ResponseEntity.ok(orderService.getProvinceStatsByPeriod(period));
-    }
     
     /**
      * 관리자 종합 통계 조회 (노선별 건수, 지역별 건수/매출)
@@ -103,7 +95,7 @@ public class AdminOrderController {
      */
     @GetMapping("/summary")
     public ResponseEntity<Map<String, Object>> getAdminStats(
-            @RequestParam(defaultValue = "month") String period) {
+            @RequestParam(name="period",defaultValue = "month") String period) {
         return ResponseEntity.ok(orderService.getComprehensiveStats(period));
     }
     

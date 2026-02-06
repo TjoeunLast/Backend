@@ -146,7 +146,9 @@ public class AdminOrderService {
         return stats;
     }
     
-    
+    /*
+     * 도착지 출발지 - 기간으로 
+     * */
     public Map<String, List<ProvinceStatResponse>> getProvinceStatsByPeriod(String period) {
         LocalDateTime end = LocalDateTime.now();
         LocalDateTime start = switch (period.toLowerCase()) {
