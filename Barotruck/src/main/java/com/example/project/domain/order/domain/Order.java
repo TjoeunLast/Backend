@@ -140,7 +140,7 @@ public class Order {
 
     // 상태 및 시간
     @Column(name = "STATUS", length = 30)
-    private String status = "REQUESTED"; // 기본값 설정
+    private String status = "REQUESTED"; // 기본값 설정 ACCEPTED, LOADING(상차지), IN_TRANSIT(이동중), UNLOADING(하차지), COMPLETED
 
     @CreationTimestamp
     @Column(name = "CREATED_AT", updatable = false)
@@ -224,6 +224,17 @@ public class Order {
         if (cancellationInfo.getOrder() != this) cancellationInfo.setOrder(this);
     }
     
+ // Order.java 내부에 추가
+    public void assignDriver(Long driverNo, String status) {
+        this.driverNo = driverNo;
+        this.status = status;
+        this.updated = LocalDateTime.now();
+    }
+
+    public void cancelOrder(String status) {
+        this.status = status;
+        this.updated = LocalDateTime.now();
+    }
 
     // 2. 기사 타임라인 묶음
     @Embedded

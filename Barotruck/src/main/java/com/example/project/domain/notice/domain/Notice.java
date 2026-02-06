@@ -31,6 +31,7 @@ import lombok.Setter;
 @Builder
 public class Notice {
 
+	// 관리자용 공지사항
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long noticeId;

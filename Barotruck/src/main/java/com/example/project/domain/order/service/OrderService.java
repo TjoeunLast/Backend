@@ -1,5 +1,6 @@
 package com.example.project.domain.order.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -46,9 +47,7 @@ public class OrderService {
             throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다.");
         }
         
-        // 상태 변경 및 차주 번호 할당 (Dirty Checking 활용)
-        // Order 엔티티에 @Setter가 없다면 아래 메서드를 엔티티에 추가하는 것을 권장합니다.
-        // order.accept(driverNo); 
+        order.assignDriver(driverNo, "ACCEPTED");
     }
 
     /**
@@ -73,6 +72,119 @@ public class OrderService {
         return convertToResponse(order);
     }
 
+    
+    /**
+     * 관리자: 오더 강제 배차
+     */
+    public void forceAllocateOrder(Long orderId, Long driverId, String adminEmail, String reason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+
+        // 1. 오더 상태 및 차주 변경
+        order.assignDriver(driverId, "ALLOCATED");
+
+        // 2. 관리자 제어 기록 생성 및 연관관계 설정
+        AdminControl control = AdminControl.builder()
+                .isForced("Y")
+                .paidAdmin(adminEmail)
+                .paidReason(reason)
+                .allocated(LocalDateTime.now())
+                .build();
+        
+        order.setAdminControl(control); // Order 내부의 편의 메서드 활용
+        orderRepository.save(order);
+    }
+
+    /**
+     * 관리자: 오더 강제 취소
+     */
+    public void adminCancelOrder(Long orderId, String adminEmail, String reason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+
+        // 1. 오더 상태 변경
+        order.cancelOrder("CANCELLED_BY_ADMIN");
+
+        // 2. 취소 정보 기록
+        CancellationInfo cancelInfo = CancellationInfo.builder()
+                .cancelReason(reason)
+                .cancelledAt(LocalDateTime.now())
+                .cancelledBy("ADMIN")
+                .build();
+
+        order.setCancellationInfo(cancelInfo);
+        orderRepository.save(order);
+    }
+
+    /**
+     * 관리자: 전체 오더 목록 조회 (페이징 처리를 권장하지만, 일단 리스트로 구현)
+     */
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getAllOrdersForAdmin() {
+        return orderRepository.findAll().stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * 관리자: 모든 취소된 오더 목록 조회
+     */
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getCancelledOrdersForAdmin() {
+        List<String> cancelStatuses = List.of("CANCELLED_BY_USER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN");
+        return orderRepository.findByStatusInOrderByCreatedAtDesc(cancelStatuses).stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * 오더 취소 공통 로직
+     */
+    public void cancelOrder(Long orderId, String cancelReason, Users currentUser) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+
+        String role = determineCancelRole(order, currentUser); // 취소 주체 판별
+        
+        // 1. 상태별 취소 가능 여부 체크
+        validateCancelCondition(order, role);
+
+        // 2. 오더 상태 업데이트
+        String newStatus = "CANCELLED_BY_" + role;
+        order.cancelOrder(newStatus); //
+
+        // 3. 취소 정보 생성 및 연관관계 설정
+        CancellationInfo cancelInfo = CancellationInfo.builder()
+                .order(order)
+                .cancelReason(cancelReason)
+                .cancelledAt(LocalDateTime.now())
+                .cancelledBy(role)
+                .build();
+        
+        order.setCancellationInfo(cancelInfo); //
+        orderRepository.save(order);
+    }
+
+    private String determineCancelRole(Order order, Users user) {
+        if (user.getRole().name().equals("ADMIN")) return "ADMIN";
+        if (order.getUser().getUserId().equals(user.getUserId())) return "USER";
+        if (order.getDriverNo() != null && order.getDriverNo().equals(user.getUserId())) return "DRIVER";
+        throw new RuntimeException("취소 권한이 없습니다.");
+    }
+
+    private void validateCancelCondition(Order order, String role) {
+        if (role.equals("ADMIN")) return; // 관리자는 무조건 가능
+        
+        // 이미 완료된 오더는 취소 불가
+        if ("COMPLETED".equals(order.getStatus())) {
+            throw new RuntimeException("이미 완료된 오더는 취소할 수 없습니다.");
+        }
+        
+        // 운송 중(IN_TRANSIT)인 경우 일반 취소 불가 (관리자에게 문의해야 함)
+        if ("IN_TRANSIT".equals(order.getStatus())) {
+            throw new RuntimeException("운행 중인 오더는 직접 취소가 불가능합니다. 고객센터에 문의하세요.");
+        }
+    }
     
     
     
@@ -131,7 +243,10 @@ public class OrderService {
                 .distance(order.getDistance())
                 .duration(order.getDuration())
 
+                
+                .status(order.getStatus())
                 // 9. 화주(사용자) 정보
+                .cancellation(OrderResponse.CancellationSummary.from(order.getCancellationInfo()))
                 .user(OrderResponse.UserSummary.from(order.getUser()))
 
                 .build();

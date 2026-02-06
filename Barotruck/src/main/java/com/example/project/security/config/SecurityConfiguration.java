@@ -55,6 +55,7 @@ public class SecurityConfiguration {
             "/sub/**" ,			
             "/api/chat/room/**",
             "/api/v1/auth/sms",
+            "/swagger-ui/index.html",
             "/api/auth/sms",	// sms
             
             

@@ -13,4 +13,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     // 차주: 현재 매칭 대기 중인(REQUESTED) 전체 오더 조회
     List<Order> findByStatusOrderByCreatedAtDesc(String status);
+    
+ // 특정 상태 리스트에 포함된 오더 조회 (예: 모든 취소 상태)
+    List<Order> findByStatusInOrderByCreatedAtDesc(List<String> statuses);
 }

@@ -50,4 +50,14 @@ public class OrderController {
         orderService.acceptOrder(orderId, user.getDriver().getDriverId());
         return ResponseEntity.ok("배차가 성공적으로 완료되었습니다.");
     }
+    
+ // OrderController.java 내부에 추가
+    @PatchMapping("/{orderId}/cancel")
+    public ResponseEntity<String> cancel(
+            @PathVariable Long orderId,
+            @RequestParam String reason,
+            @AuthenticationPrincipal Users user) {
+        orderService.cancelOrder(orderId, reason, user);
+        return ResponseEntity.ok("오더 취소가 완료되었습니다.");
+    }
 }
