@@ -97,4 +97,27 @@ public class OrderResponse {
                     .build();
         }
     }
+    
+    
+ // 7. 취소 정보 (추가)
+    private CancellationSummary cancellation;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CancellationSummary {
+        private String cancelReason;
+        private LocalDateTime cancelledAt;
+        private String cancelledBy;
+
+        public static CancellationSummary from(com.example.project.domain.order.domain.CancellationInfo info) {
+            if (info == null) return null;
+            return CancellationSummary.builder()
+                    .cancelReason(info.getCancelReason())
+                    .cancelledAt(info.getCancelledAt())
+                    .cancelledBy(info.getCancelledBy())
+                    .build();
+        }
+    }
 }
