@@ -68,7 +68,7 @@ public class OrderResponse {
         return OrderResponse.builder()
                 .orderId(order.getOrderId())
                 .status(order.getStatus())
-                .createdAt(LocalDateTime.now())
+                .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
                 .distance(order.getDistance())
                 .duration(order.getDuration())
