@@ -182,6 +182,34 @@ public class Order {
     private LocalDateTime createdAt; // 이 필드가 반드시 Order 엔티티 직속으로 있어야 합니다.
 
     
+ // 응답용 내부 DTO
+    @Getter @AllArgsConstructor
+    public static class RouteStatisticsResponse {
+        private String startProvince;
+        private String endProvince;
+        private long orderCount;
+    }
+    
+    @Getter @AllArgsConstructor
+    public static class ProvinceStatResponse {
+        private String province;
+        private long count;
+    }
+ // --- 응답 DTO ---
+    @Getter @AllArgsConstructor
+    public static class RouteStatResponse {
+        private String startProvince;
+        private String endProvince;
+        private long count;
+    }
+
+    @Getter @AllArgsConstructor
+    public static class ProvinceAnalysisResponse {
+        private String province;
+        private long orderCount;
+        private long totalSales; // 해당 지역의 총 매출액
+    }
+    
     public static Order createOrder(Users user, OrderRequest request) {
         // 1. 변하지 않는 상세 정보를 한데 묶음
         OrderSnapshot snapshot = OrderSnapshot.builder()
