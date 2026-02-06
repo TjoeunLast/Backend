@@ -14,7 +14,9 @@ import com.example.project.domain.order.domain.embedded.OrderSnapshot;
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse; // 추가
 import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.member.domain.Driver;
 import com.example.project.member.domain.Users;
+import com.example.project.member.repository.DriverRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -24,7 +26,7 @@ import lombok.RequiredArgsConstructor;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-
+    private final DriverRepository driverRepository; // 드라이버 정보 조회를 위한 레포지토리
     /**
      * 1. 화주: 오더 생성 (C)
      */
@@ -170,6 +172,27 @@ public class OrderService {
         order.changeStatus(newStatus);
 
         return OrderResponse.from(order);
+    }
+    
+    /**
+     * 드라이버 맞춤형 추천 오더 목록 조회
+     */
+    public List<OrderResponse> getRecommendedOrders(Long userId) {
+        // 1. 드라이버 프로필 조회
+        Driver driver = driverRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new RuntimeException("드라이버 프로필을 찾을 수 없습니다."));
+
+        // 2. 맞춤형 오더 조회
+        // 주의: driver.getTonnage() 필드가 BigDecimal 타입인지 확인하세요.
+        List<Order> recommendedOrders = orderRepository.findCustomOrders(
+                driver.getCarType(), 
+                driver.getTonnage() 
+        );
+
+        // 3. 응답 변환
+        return recommendedOrders.stream()
+                .map(OrderResponse::from)
+                .collect(Collectors.toList());
     }
     
     
