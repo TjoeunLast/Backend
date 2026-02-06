@@ -1,5 +1,7 @@
 package com.example.project.member.dto;
 
+import java.math.BigDecimal;
+
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,7 +19,7 @@ public class DriverRequest {
     @NotBlank(message = "차량 종류는 필수입니다.")
     private String carType;
 
-    private Long tonnage;
+    private BigDecimal tonnage;
     private Long career;
     private String bankName;
     private String accountNum;

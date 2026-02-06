@@ -42,6 +42,18 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getAvailableOrders());
     }
 
+    /**
+     * 신규: 드라이버의 차량 사격에 맞춘 '추천 오더' 조회
+     * 인증된 사용자의 정보를 기반으로 내 차에 맞는 짐만 필터링합니다.
+     */
+    @GetMapping("/recommended")
+    public ResponseEntity<List<OrderResponse>> getRecommendedOrders(
+            @AuthenticationPrincipal Users user) {
+        // 로그인된 사용자의 ID를 넘겨 서비스에서 드라이버 정보를 찾음
+        List<OrderResponse> responses = orderService.getRecommendedOrders(user.getUserId());
+        return ResponseEntity.ok(responses);
+    }
+    
     // 차주: 오더 수락 (배차 신청)
     @PatchMapping("/{orderId}/accept")
     public ResponseEntity<String> accept(

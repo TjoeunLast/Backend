@@ -1,5 +1,6 @@
 package com.example.project.domain.order.repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -113,4 +114,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
 
 
+    
+    
+ // OrderRepository.java
+    @Query("SELECT o FROM Order o JOIN o.snapshot s " + 
+           "WHERE o.status = 'REQUESTED' " +
+           "AND (s.reqCarType = :carType OR s.reqCarType IS NULL) " +
+           "AND s.tonnage <= :driverTonnage " + 
+           "ORDER BY o.createdAt DESC")
+    List<Order> findCustomOrders(
+        @Param("carType") String carType, 
+        @Param("driverTonnage") BigDecimal driverTonnage
+    );
 }
