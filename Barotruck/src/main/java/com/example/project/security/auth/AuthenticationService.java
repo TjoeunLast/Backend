@@ -44,7 +44,6 @@ public class AuthenticationService {
 	 */
 	public AuthenticationResponse register(RegisterRequest request) {
 
-		// 전달받은 neighborhoodId로 동네 정보 조회
 		if(request.getRole() == Role.ADMIN) {
 			return null;
 		}
@@ -68,7 +67,6 @@ public class AuthenticationService {
 	                .user(user)
 	                .build();
 	        user.setShipper(shipper);
-	        shipperRepository.save(shipper);
 	    } 
 	    else if (request.getDriver() != null) {
 	        DriverDto dDto = request.getDriver();
@@ -78,7 +76,6 @@ public class AuthenticationService {
 	                .user(user)
 	                .build();
 	        user.setDriver(driver);
-	        driversRepository.save(driver);
 	    }
 		
 		
@@ -105,6 +102,8 @@ public class AuthenticationService {
 			// DB 예외의 실제 원인이 SQL 예외인지 확인 (Oracle ORA-00001 등)
 			Throwable rootCause = e.getRootCause();
 
+			System.out.println(e);
+			
 			if (rootCause instanceof SQLException) {
 				SQLException sqlEx = (SQLException) rootCause;
 

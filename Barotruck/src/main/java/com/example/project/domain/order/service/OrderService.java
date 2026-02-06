@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.project.domain.order.domain.AdminControl;
 import com.example.project.domain.order.domain.CancellationInfo;
 import com.example.project.domain.order.domain.Order;
-import com.example.project.domain.order.domain.embedded.DriverTimeline;
+import com.example.project.domain.order.domain.embedded.OrderSnapshot;
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse; // 추가
 import com.example.project.domain.order.repository.OrderRepository;
@@ -46,7 +46,6 @@ public class OrderService {
         if (!"REQUESTED".equals(order.getStatus())) {
             throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다.");
         }
-        
         order.assignDriver(driverNo, "ACCEPTED");
     }
 
@@ -95,26 +94,7 @@ public class OrderService {
         orderRepository.save(order);
     }
 
-    /**
-     * 관리자: 오더 강제 취소
-     */
-    public void adminCancelOrder(Long orderId, String adminEmail, String reason) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
 
-        // 1. 오더 상태 변경
-        order.cancelOrder("CANCELLED_BY_ADMIN");
-
-        // 2. 취소 정보 기록
-        CancellationInfo cancelInfo = CancellationInfo.builder()
-                .cancelReason(reason)
-                .cancelledAt(LocalDateTime.now())
-                .cancelledBy("ADMIN")
-                .build();
-
-        order.setCancellationInfo(cancelInfo);
-        orderRepository.save(order);
-    }
 
     /**
      * 관리자: 전체 오더 목록 조회 (페이징 처리를 권장하지만, 일단 리스트로 구현)
@@ -126,16 +106,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
     
-    /**
-     * 관리자: 모든 취소된 오더 목록 조회
-     */
-    @Transactional(readOnly = true)
-    public List<OrderResponse> getCancelledOrdersForAdmin() {
-        List<String> cancelStatuses = List.of("CANCELLED_BY_USER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN");
-        return orderRepository.findByStatusInOrderByCreatedAtDesc(cancelStatuses).stream()
-                .map(this::convertToResponse)
-                .collect(Collectors.toList());
-    }
+
     
     /**
      * 오더 취소 공통 로직
@@ -186,69 +157,75 @@ public class OrderService {
         }
     }
     
+    public OrderResponse updateStatus(Long orderId, String newStatus, Long driverNo) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주문입니다."));
+
+        // 권한 검증: 이 오더를 배정받은 기사인지 확인
+        if (order.getDriverNo() == null || !order.getDriverNo().equals(driverNo)) {
+            throw new IllegalStateException("해당 주문의 담당 기사가 아닙니다.");
+        }
+
+        // 도메인 엔티티에 상태 변경 로직 위임
+        order.changeStatus(newStatus);
+
+        return OrderResponse.from(order);
+    }
     
     
-    /**
-     * 엔티티를 OrderResponse DTO로 변환하는 내부 공통 메서드
-     */
+    
     private OrderResponse convertToResponse(Order order) {
-        // Embedded 객체들을 안전하게 추출 (Null 방지)
-        DriverTimeline timeline = order.getDriverTimeline();
-        AdminControl admin = order.getAdminControl();
-        CancellationInfo cancellation = order.getCancellationInfo();
+        // 1. Embedded 객체 추출
+        OrderSnapshot snapshot = order.getSnapshot();
+        
+        // snapshot이 null일 경우를 대비한 방어 로직 (정상적인 주문이라면 null일 리 없지만 안전을 위해)
+        if (snapshot == null) {
+            throw new IllegalStateException("주문 상세 정보(Snapshot)가 존재하지 않습니다.");
+        }
 
         return OrderResponse.builder()
-                // 1. 주문 기본 정보
+                // 1. 주문 기본 정보 및 시스템 지표
                 .orderId(order.getOrderId())
                 .status(order.getStatus())
-                .createdAt(order.getCreatedAt())
-                .updated(order.getUpdated())
-
-                // 2. 상차지 정보
-                .startAddr(order.getStartAddr())
-                .startPlace(order.getStartPlace())
-                .startType(order.getStartType())
-                .startSchedule(order.getStartSchedule())
-                .puProvince(order.getPuProvince())
-                .startNeighborhoodId(order.getStartNeighborhood() != null ? 
-                                     order.getStartNeighborhood().getNeighborhoodId() : null)
-
-                // 3. 하차지 정보
-                .endAddr(order.getEndAddr())
-                .endPlace(order.getEndPlace())
-                .endType(order.getEndType())
-                .endSchedule(order.getEndSchedule())
-                .doProvince(order.getDoProvince())
-                .endNeighborhoodId(order.getEndNeighborhood() != null ? 
-                                   order.getEndNeighborhood().getNeighborhoodId() : null)
-
-                // 4. 화물 및 작업 정보
-                .cargoContent(order.getCargoContent())
-                .loadMethod(order.getLoadMethod())
-                .workType(order.getWorkType())
-                .tonnage(order.getTonnage())
-                .reqCarType(order.getReqCarType())
-                .reqTonnage(order.getReqTonnage())
-                .driveMode(order.getDriveMode())
-                .loadWeight(order.getLoadWeight())
-
-                // 5. 요금 정보
-                .basePrice(order.getBasePrice())
-                .laborFee(order.getLaborFee())
-                .packagingPrice(order.getPackagingPrice())
-                .insuranceFee(order.getInsuranceFee())
-                .payMethod(order.getPayMethod())
-
-                // 6. 시스템 계산 지표
                 .distance(order.getDistance())
                 .duration(order.getDuration())
+                .createdAt(LocalDateTime.now())
+                .updated(order.getUpdated())
 
-                
-                .status(order.getStatus())
-                // 9. 화주(사용자) 정보
+                // 2. 상차지 정보 (Snapshot에서 추출)
+                .startAddr(snapshot.getStartAddr())
+                .startPlace(snapshot.getStartPlace())
+                .startType(snapshot.getStartType())
+                .startSchedule(snapshot.getStartSchedule())
+                .puProvince(snapshot.getPuProvince())
+
+                // 3. 하차지 정보 (Snapshot에서 추출)
+                .endAddr(snapshot.getEndAddr())
+                .endPlace(snapshot.getEndPlace())
+                .endType(snapshot.getEndType())
+                .endSchedule(snapshot.getEndSchedule())
+                .doProvince(snapshot.getDoProvince())
+
+                // 4. 화물 및 작업 정보 (Snapshot에서 추출)
+                .cargoContent(snapshot.getCargoContent())
+                .loadMethod(snapshot.getLoadMethod())
+                .workType(snapshot.getWorkType())
+                .tonnage(snapshot.getTonnage())
+                .reqCarType(snapshot.getReqCarType())
+                .reqTonnage(snapshot.getReqTonnage())
+                .driveMode(snapshot.getDriveMode())
+                .loadWeight(snapshot.getLoadWeight())
+
+                // 5. 요금 정보 (Snapshot에서 추출)
+                .basePrice(snapshot.getBasePrice())
+                .laborFee(snapshot.getLaborFee())
+                .packagingPrice(snapshot.getPackagingPrice())
+                .insuranceFee(snapshot.getInsuranceFee())
+                .payMethod(snapshot.getPayMethod())
+
+                // 6. 연관 객체 요약 정보
                 .cancellation(OrderResponse.CancellationSummary.from(order.getCancellationInfo()))
                 .user(OrderResponse.UserSummary.from(order.getUser()))
-
                 .build();
     }
     

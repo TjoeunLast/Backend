@@ -1,7 +1,6 @@
 package com.example.project.domain.order.domain;
 
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,11 +8,11 @@ import java.util.List;
 import org.hibernate.annotations.CreationTimestamp;
 
 import com.example.project.domain.order.domain.embedded.DriverTimeline;
+import com.example.project.domain.order.domain.embedded.OrderSnapshot;
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.review.domain.Report;
 import com.example.project.domain.review.domain.Review;
 import com.example.project.domain.settlement.domain.Settlement;
-import com.example.project.global.neighborhood.Neighborhood; // 지역코드 엔티티
 import com.example.project.member.domain.Users; // 사용자 엔티티
 
 import jakarta.persistence.CascadeType;
@@ -56,102 +55,19 @@ public class Order {
     @JoinColumn(name = "USER_ID")
     private Users user;
 
-    // 상차지 정보
-    @Column(name = "START_ADDR", length = 500)
-    private String startAddr;
-
-    private String startPlace; // 판교 테크노벨리 제1공장	기사님이 현장에서 위치를 쉽게 식별하기 위한 명칭 (건물명 등)
+ // 본문 정보 (한 번 정해지면 거의 안 바뀜)
+    @Embedded
+    private OrderSnapshot snapshot;
+    // 1. 거리 및 소요 시간 (물리적 지표)
+    @Column(name = "DISTANCE")
+    private Long distance; // 거리 (Field6)
     
-    @Column(name = "START_TYPE")
-    private String startType; // 당상, 익상, 야간상차
-
-    @Column(name = "START_SCHEDULE", length = 20)
-    private String startSchedule;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "START_NBH_ID")
-    private Neighborhood startNeighborhood; // 상차지 지역코드 (FK)
-
-    // 3. 지역 정보
-    @Column(name = "PU_PROVINCE")
-    private String puProvince; // 출발 주
-
-    @Column(name = "DO_PROVINCE")
-    private String doProvince; // 도착 주
-
-    // 하차지 정보
-    @Column(name = "END_ADDR", length = 500)
-    private String endAddr;
-
-    private String endPlace;
-    
-    @Column(name = "END_TYPE")
-    private String endType; // 당착, 내착
-
-    @Column(name = "END_SCHEDULE", length = 20, nullable=true)
-    private String endSchedule;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "END_NBH_ID")
-    private Neighborhood endNeighborhood; // 하차지 지역코드 (FK)
-
-    // 화물 및 작업 정보
-    @Column(name = "CARGO_CONTENT", length = 500, nullable=true)
-    private String cargoContent;
-
-    @Column(name = "LOAD_METHOD", length = 50)
-    private String loadMethod; // 독차, 혼적
-
-    @Column(name = "WORK_TYPE", length = 50, nullable=true)
-    private String workType; // 지게차 상/하차, 수작업
-
-    @Column(name = "TONNAGE", precision = 4, scale = 1)
-    private BigDecimal tonnage;
-
-    @Column(name = "REQ_CAR_TYPE", length = 50, nullable=true)
-    private String reqCarType; // 윙바디, 카고 등
-
-    @Column(name = "REQ_TONNAGE", nullable=true)
-    private String reqTonnage;
-
-    @Column(name = "DRIVE_MODE", length = 20)
-    private String driveMode; // 편도, 왕복
-
-    @Column(name = "LOAD_WEIGHT")
-    private Long loadWeight;
-
-    // 요금 정보
-    @Column(name = "BASE_PRICE")
-    private Long basePrice;
-
-    @Column(name = "LABOR_FEE", nullable=true)
-    private Long laborFee;
-    
- // 2. 추가 비용 정보
-    @Column(name = "PACKAGING_PRICE")
-    private Long packagingPrice; // 포장비용
-
-    @Column(name = "INSURANCE_FEE")
-    private Long insuranceFee; // 보험료 (Field5)
-    
-    // 결제 관련 
-    @Column(name = "PAY_METHOD", length = 20)
-    private String payMethod; // 카드, 인수증 등
+    @Column(name = "DURATION")
+    private Long duration; // 소요시간 (Field7)
 
     // 상태 및 시간
     @Column(name = "STATUS", length = 30)
     private String status = "REQUESTED"; // 기본값 설정 ACCEPTED, LOADING(상차지), IN_TRANSIT(이동중), UNLOADING(하차지), COMPLETED
-
-    @CreationTimestamp
-    @Column(name = "CREATED_AT", updatable = false)
-    private LocalDateTime createdAt;
-
-    // 1. 거리 및 소요 시간 (물리적 지표)
-    @Column(name = "DISTANCE")
-    private Long distance; // 거리 (Field6)
-
-    @Column(name = "DURATION")
-    private Long duration; // 소요시간 (Field7)
 
     // 4. 시스템 공통
     @Column(name = "UPDATED")
@@ -176,6 +92,26 @@ public class Order {
  // [변경] 결제/정산 정보 (Settlement로 이동)
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Settlement settlement;
+    
+    
+ // Order.java 내부에 추가
+    public void changeStatus(String newStatus) {
+        validateStatusTransition(newStatus); // 필요 시 상태 전환 규칙 검증 로직 추가
+        this.status = newStatus;
+        this.updated = LocalDateTime.now(); // 상태 변경 시 시간 갱신
+    }
+
+    /**
+     * 상태 변경 시 비즈니스 규칙 검증 (선택 사항)
+     */
+    private void validateStatusTransition(String nextStatus) {
+        // 예: COMPLETED 상태에서는 더 이상 변경 불가 등
+        if ("COMPLETED".equals(this.status)) {
+            throw new IllegalStateException("이미 완료된 주문은 상태를 변경할 수 없습니다.");
+        }
+        
+        // 이외에 ACCEPTED -> LOADING -> IN_TRANSIT 등의 순서 검증 로직을 넣을 수 있습니다.
+    }
     
  // 리뷰 추가 편의 메서드
     public void addReview(Review review) {
@@ -240,12 +176,15 @@ public class Order {
     @Embedded
     private DriverTimeline driverTimeline;
 
+ // Order.java 내부
+    @CreationTimestamp
+    @Column(name = "CREATED_AT", updatable = false)
+    private LocalDateTime createdAt; // 이 필드가 반드시 Order 엔티티 직속으로 있어야 합니다.
 
-    // Order.java 내부 추가
+    
     public static Order createOrder(Users user, OrderRequest request) {
-
-        return Order.builder()
-                .user(user)
+        // 1. 변하지 않는 상세 정보를 한데 묶음
+        OrderSnapshot snapshot = OrderSnapshot.builder()
                 .startAddr(request.getStartAddr())
                 .startPlace(request.getStartPlace())
                 .startType(request.getStartType())
@@ -269,6 +208,12 @@ public class Order {
                 .packagingPrice(request.getPackagingPrice())
                 .insuranceFee(request.getInsuranceFee())
                 .payMethod(request.getPayMethod())
+                .build();
+
+        // 2. 최종 Order 객체 생성
+        return Order.builder()
+                .user(user)
+                .snapshot(snapshot) // 묶은 덩어리를 한 번에 주입
                 .distance(request.getDistance())
                 .duration(request.getDuration())
                 .status("REQUESTED")
