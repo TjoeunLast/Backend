@@ -60,4 +60,17 @@ public class OrderController {
         orderService.cancelOrder(orderId, reason, user);
         return ResponseEntity.ok("오더 취소가 완료되었습니다.");
     }
+    
+    // 차주가 상태 변경하는 함수 운행중 운행완료 기타 등등...
+    @PatchMapping("/{orderId}/status")
+    public ResponseEntity<OrderResponse> updateOrderStatus(
+            @PathVariable Long orderId,
+            @RequestParam String newStatus,
+            @AuthenticationPrincipal Users userDetails) {
+        
+        // 현재 로그인한 사용자가 드라이버인지 권한 체크가 필요할 수 있습니다.
+        OrderResponse response = orderService.updateStatus(orderId, newStatus, userDetails.getUserId());
+        return ResponseEntity.ok(response);
+    }
+    
 }

@@ -3,8 +3,9 @@ package com.example.project.domain.order.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.example.project.domain.order.domain.Order;
+import com.example.project.domain.order.domain.embedded.OrderSnapshot;
 import com.example.project.global.image.ImageInfo;
-import com.example.project.member.domain.Driver;
 import com.example.project.security.user.Role;
 
 import lombok.AllArgsConstructor;
@@ -17,29 +18,26 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderResponse {
-    // 1. 주문 기본 정보 및 상태
     private Long orderId;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updated;
 
-    // 2. 상차지 상세 정보 (Request 필드 반영)
+    // 상차지
     private String startAddr;
-    private String startPlace;      // 추가: 장소명
+    private String startPlace;
     private String startType;
     private String startSchedule;
-    private String puProvince;      // 추가: 시/도
-    private Long startNeighborhoodId;
+    private String puProvince;
 
-    // 3. 하차지 상세 정보 (Request 필드 반영)
+    // 하차지
     private String endAddr;
-    private String endPlace;        // 추가: 장소명
+    private String endPlace;
     private String endType;
     private String endSchedule;
-    private String doProvince;      // 추가: 시/도
-    private Long endNeighborhoodId;
+    private String doProvince;
 
-    // 4. 화물 및 작업 세부 정보
+    // 화물/작업
     private String cargoContent;
     private String loadMethod;
     private String workType;
@@ -49,21 +47,60 @@ public class OrderResponse {
     private String driveMode;
     private Long loadWeight;
 
-    // 5. 요금 및 정산 정보 (Embedded 필드 및 추가비용 반영)
+    // 요금
     private Long basePrice;
     private Long laborFee;
-    private Long packagingPrice;   // 추가: 포장비
-    private Long insuranceFee;     // 추가: 보험료
+    private Long packagingPrice;
+    private Long insuranceFee;
     private String payMethod;
-    private Long feeRate;
-    private Long totalPrice;
+    
+    // 시스템 지표
+    private Long distance;
+    private Long duration;
 
-    // 6. 시스템 계산 지표 (지도 API 결과)
-    private Long distance;         // 추가: 거리
-    private Long duration;         // 추가: 소요시간
-
-    // 9. 화주(사용자) 정보
     private UserSummary user;
+    private CancellationSummary cancellation;
+
+    public static OrderResponse from(Order order) {
+        OrderSnapshot s = order.getSnapshot();
+        if (s == null) return null;
+
+        return OrderResponse.builder()
+                .orderId(order.getOrderId())
+                .status(order.getStatus())
+                .createdAt(LocalDateTime.now())
+                .updated(order.getUpdated())
+                .distance(order.getDistance())
+                .duration(order.getDuration())
+                // Snapshot 데이터 매핑
+                .startAddr(s.getStartAddr())
+                .startPlace(s.getStartPlace())
+                .startType(s.getStartType())
+                .startSchedule(s.getStartSchedule())
+                .puProvince(s.getPuProvince())
+                .endAddr(s.getEndAddr())
+                .endPlace(s.getEndPlace())
+                .endType(s.getEndType())
+                .endSchedule(s.getEndSchedule())
+                .doProvince(s.getDoProvince())
+                .cargoContent(s.getCargoContent())
+                .loadMethod(s.getLoadMethod())
+                .workType(s.getWorkType())
+                .tonnage(s.getTonnage())
+                .reqCarType(s.getReqCarType())
+                .reqTonnage(s.getReqTonnage())
+                .driveMode(s.getDriveMode())
+                .loadWeight(s.getLoadWeight())
+                .basePrice(s.getBasePrice())
+                .laborFee(s.getLaborFee())
+                .packagingPrice(s.getPackagingPrice())
+                .insuranceFee(s.getInsuranceFee())
+                .payMethod(s.getPayMethod())
+                // 요약 정보
+                .user(UserSummary.from(order.getUser()))
+                .cancellation(CancellationSummary.from(order.getCancellationInfo()))
+                .build();
+    }
 
     @Data
     @Builder
@@ -77,13 +114,11 @@ public class OrderResponse {
         private ImageInfo profileImage;
         private Long ratingAvg;
         private Integer age;
-        private Long level; // 추가: 유저 등급
+        private Long level;
         private Role role;
-        // Driver 정보는 필요한 최소 정보만 노출하거나 별도 DTO 권장
 
         public static UserSummary from(com.example.project.member.domain.Users userEntity) {
             if (userEntity == null) return null;
-            
             return UserSummary.builder()
                     .userId(userEntity.getUserId())
                     .email(userEntity.getEmail())
@@ -92,15 +127,11 @@ public class OrderResponse {
                     .profileImage(userEntity.getProfileImage())
                     .ratingAvg(userEntity.getRatingAvg())
                     .age(userEntity.getAge())
-                    .level(userEntity.getUser_level()) // 유저 등급 반영
+                    .level(userEntity.getUser_level())
                     .role(userEntity.getRole())
                     .build();
         }
     }
-    
-    
- // 7. 취소 정보 (추가)
-    private CancellationSummary cancellation;
 
     @Data
     @Builder

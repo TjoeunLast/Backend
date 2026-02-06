@@ -1,21 +1,29 @@
 package com.example.project.domain.order.controller;
 
-import com.example.project.domain.order.dto.OrderResponse;
-import com.example.project.domain.order.service.OrderService;
-import com.example.project.member.domain.Users;
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import com.example.project.domain.order.dto.OrderResponse;
+import com.example.project.domain.order.service.AdminOrderService;
+import com.example.project.member.domain.Users;
+
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/admin/orders")
 @RequiredArgsConstructor
 public class AdminOrderController {
 
-    private final OrderService orderService;
+    private final AdminOrderService orderService;
 
     // 모든 오더 조회
     @GetMapping
@@ -50,15 +58,14 @@ public class AdminOrderController {
         return ResponseEntity.ok(orderService.getCancelledOrdersForAdmin());
     }
     
- // AdminOrderController.java 내부에 추가
-    // 관리자가 모든 오더를 모니터링하다가 강제로 취소할 때 사용합니다.
+ // 강제 취소 (DeleteMapping "/force-cancel")
     @DeleteMapping("/{orderId}/force-cancel")
     public ResponseEntity<String> forceCancel(
             @PathVariable Long orderId,
             @RequestParam String reason,
             @AuthenticationPrincipal Users admin) {
-        // 관리자 로직도 동일한 서비스를 호출하되, 서비스 내부에서 ADMIN 권한으로 처리됨
-        orderService.cancelOrder(orderId, reason, admin);
+        // 정의되지 않았던 cancelOrder 대신 adminCancelOrder를 호출하도록 수정
+    	orderService.adminCancelOrder(orderId, admin.getEmail(), reason);
         return ResponseEntity.ok("관리자 권한으로 오더를 강제 취소했습니다.");
     }
     
