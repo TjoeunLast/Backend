@@ -52,6 +52,10 @@ public class OrderService {
         if (!"REQUESTED".equals(order.getStatus())) {
             throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다.");
         }
+        System.out.println("--------------------------------------");
+        System.out.println(driverNo);
+        System.out.println("--------------------------------------");
+
         order.assignDriver(driverNo, "ACCEPTED");
     }
 
