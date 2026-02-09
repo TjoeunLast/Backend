@@ -3,8 +3,9 @@ package com.example.project.domain.order.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.example.project.domain.order.domain.Order;
+import com.example.project.domain.order.domain.embedded.OrderSnapshot;
 import com.example.project.global.image.ImageInfo;
-import com.example.project.member.domain.Driver;
 import com.example.project.security.user.Role;
 
 import lombok.AllArgsConstructor;
@@ -17,24 +18,26 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderResponse {
-    // 1. 주문 기본 정보
     private Long orderId;
     private String status;
     private LocalDateTime createdAt;
+    private LocalDateTime updated;
 
-    // 2. 상차지 정보
+    // 상차지
     private String startAddr;
+    private String startPlace;
     private String startType;
     private String startSchedule;
-    private Long startNeighborhoodId;
+    private String puProvince;
 
-    // 3. 하차지 정보
+    // 하차지
     private String endAddr;
+    private String endPlace;
     private String endType;
     private String endSchedule;
-    private Long endNeighborhoodId;
+    private String doProvince;
 
-    // 4. 화물 및 작업 정보
+    // 화물/작업
     private String cargoContent;
     private String loadMethod;
     private String workType;
@@ -44,18 +47,60 @@ public class OrderResponse {
     private String driveMode;
     private Long loadWeight;
 
-    // 5. 요금 정보
+    // 요금
     private Long basePrice;
     private Long laborFee;
+    private Long packagingPrice;
+    private Long insuranceFee;
     private String payMethod;
-    private Long feeRate;
-    private Long totalPrice;
+    
+    // 시스템 지표
+    private Long distance;
+    private Long duration;
 
-    // 6. 배차 정보
-    private Long driverNo;
-
-    // 7. 화주(사용자) 정보 - 맨 아래로 분리
     private UserSummary user;
+    private CancellationSummary cancellation;
+
+    public static OrderResponse from(Order order) {
+        OrderSnapshot s = order.getSnapshot();
+        if (s == null) return null;
+
+        return OrderResponse.builder()
+                .orderId(order.getOrderId())
+                .status(order.getStatus())
+                .createdAt(order.getCreatedAt())
+                .updated(order.getUpdated())
+                .distance(order.getDistance())
+                .duration(order.getDuration())
+                // Snapshot 데이터 매핑
+                .startAddr(s.getStartAddr())
+                .startPlace(s.getStartPlace())
+                .startType(s.getStartType())
+                .startSchedule(s.getStartSchedule())
+                .puProvince(s.getPuProvince())
+                .endAddr(s.getEndAddr())
+                .endPlace(s.getEndPlace())
+                .endType(s.getEndType())
+                .endSchedule(s.getEndSchedule())
+                .doProvince(s.getDoProvince())
+                .cargoContent(s.getCargoContent())
+                .loadMethod(s.getLoadMethod())
+                .workType(s.getWorkType())
+                .tonnage(s.getTonnage())
+                .reqCarType(s.getReqCarType())
+                .reqTonnage(s.getReqTonnage())
+                .driveMode(s.getDriveMode())
+                .loadWeight(s.getLoadWeight())
+                .basePrice(s.getBasePrice())
+                .laborFee(s.getLaborFee())
+                .packagingPrice(s.getPackagingPrice())
+                .insuranceFee(s.getInsuranceFee())
+                .payMethod(s.getPayMethod())
+                // 요약 정보
+                .user(UserSummary.from(order.getUser()))
+                .cancellation(CancellationSummary.from(order.getCancellationInfo()))
+                .build();
+    }
 
     @Data
     @Builder
@@ -69,13 +114,11 @@ public class OrderResponse {
         private ImageInfo profileImage;
         private Long ratingAvg;
         private Integer age;
+        private Long level;
         private Role role;
-        private Driver driver; // 필요 시 포함하되, 무한 참조 방지를 위해 주의 필요
 
-        // Users 엔티티를 입력받아 UserSummary DTO로 변환하는 메서드
         public static UserSummary from(com.example.project.member.domain.Users userEntity) {
             if (userEntity == null) return null;
-            
             return UserSummary.builder()
                     .userId(userEntity.getUserId())
                     .email(userEntity.getEmail())
@@ -84,8 +127,27 @@ public class OrderResponse {
                     .profileImage(userEntity.getProfileImage())
                     .ratingAvg(userEntity.getRatingAvg())
                     .age(userEntity.getAge())
+                    .level(userEntity.getUser_level())
                     .role(userEntity.getRole())
-                    .driver(userEntity.getDriver()) // Driver 정보가 필요하다면 추가
+                    .build();
+        }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CancellationSummary {
+        private String cancelReason;
+        private LocalDateTime cancelledAt;
+        private String cancelledBy;
+
+        public static CancellationSummary from(com.example.project.domain.order.domain.CancellationInfo info) {
+            if (info == null) return null;
+            return CancellationSummary.builder()
+                    .cancelReason(info.getCancelReason())
+                    .cancelledAt(info.getCancelledAt())
+                    .cancelledBy(info.getCancelledBy())
                     .build();
         }
     }

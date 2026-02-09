@@ -1,6 +1,7 @@
 package com.example.project.member.domain;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -88,7 +89,9 @@ public class Users implements UserDetails {
     private String phone;
 
     private Long ratingAvg;
-
+    
+    @Builder.Default
+    private Long user_level = 0L; // 등급 필드: 기본값 0 배정
     
  // User.java 내부
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
@@ -98,7 +101,8 @@ public class Users implements UserDetails {
     private Driver driver;
     
     
-
+    private LocalDateTime rate;
+    
  // 기존 코드에 필드 추가
     @Column(name = "fcm_token")
     private String fcmToken; // Flutter 앱에서 발급받아 서버로 보내준 토큰 저장
@@ -137,6 +141,10 @@ public class Users implements UserDetails {
         }
     }
     
+    // 등급 업데이트 메서드 (필요시)
+    public void updateLevel(Long newLevel) {
+        this.user_level = newLevel;
+    }
     
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

@@ -42,6 +42,18 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getAvailableOrders());
     }
 
+    /**
+     * 신규: 드라이버의 차량 사격에 맞춘 '추천 오더' 조회
+     * 인증된 사용자의 정보를 기반으로 내 차에 맞는 짐만 필터링합니다.
+     */
+    @GetMapping("/recommended")
+    public ResponseEntity<List<OrderResponse>> getRecommendedOrders(
+            @AuthenticationPrincipal Users user) {
+        // 로그인된 사용자의 ID를 넘겨 서비스에서 드라이버 정보를 찾음
+        List<OrderResponse> responses = orderService.getRecommendedOrders(user.getUserId());
+        return ResponseEntity.ok(responses);
+    }
+    
     // 차주: 오더 수락 (배차 신청)
     @PatchMapping("/{orderId}/accept")
     public ResponseEntity<String> accept(
@@ -50,4 +62,27 @@ public class OrderController {
         orderService.acceptOrder(orderId, user.getDriver().getDriverId());
         return ResponseEntity.ok("배차가 성공적으로 완료되었습니다.");
     }
+    
+ // OrderController.java 내부에 추가
+    @PatchMapping("/{orderId}/cancel")
+    public ResponseEntity<String> cancel(
+            @PathVariable Long orderId,
+            @RequestParam String reason,
+            @AuthenticationPrincipal Users user) {
+        orderService.cancelOrder(orderId, reason, user);
+        return ResponseEntity.ok("오더 취소가 완료되었습니다.");
+    }
+    
+    // 차주가 상태 변경하는 함수 운행중 운행완료 기타 등등...
+    @PatchMapping("/{orderId}/status")
+    public ResponseEntity<OrderResponse> updateOrderStatus(
+            @PathVariable Long orderId,
+            @RequestParam String newStatus,
+            @AuthenticationPrincipal Users userDetails) {
+        
+        // 현재 로그인한 사용자가 드라이버인지 권한 체크가 필요할 수 있습니다.
+        OrderResponse response = orderService.updateStatus(orderId, newStatus, userDetails.getUserId());
+        return ResponseEntity.ok(response);
+    }
+    
 }
