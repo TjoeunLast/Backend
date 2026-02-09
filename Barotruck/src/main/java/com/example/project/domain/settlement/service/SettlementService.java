@@ -31,18 +31,23 @@ public class SettlementService {
 
         // 주문 시점의 스냅샷 가격 정보 가져오기
         var snapshot = order.getSnapshot();
-        long baseTotal = snapshot.getBasePrice() + snapshot.getLaborFee() + 
+        long cargoPrice = snapshot.getBasePrice() + snapshot.getLaborFee() + 
                          snapshot.getPackagingPrice() + snapshot.getInsuranceFee();
         
+        long feeRate = 5L; 
+        long platformFee = (cargoPrice * feeRate) / 100;
+        
         // 최종 결제 금액 계산
-        long totalPrice = baseTotal - request.getCouponDiscount() - request.getLevelDiscount();
+        long totalPrice = cargoPrice + platformFee - request.getCouponDiscount() - request.getLevelDiscount();
 
+        
+        
         Settlement settlement = Settlement.builder()
                 .order(order)
                 .user(user)
                 .levelDiscount(request.getLevelDiscount())
                 .couponDiscount(request.getCouponDiscount())
-                .totalPrice(totalPrice)
+                .totalPrice(Math.max(totalPrice, 0L)) // 마이너스 결제 방지
                 .feeRate(10L) // 기본 수수료율 10% 설정
                 .status("READY") // 결제 대기 상태
                 .feeDate(LocalDateTime.now())
