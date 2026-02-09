@@ -59,7 +59,7 @@ public class OrderController {
     public ResponseEntity<String> accept(
             @PathVariable("orderId") Long orderId, 
             @AuthenticationPrincipal Users user) {
-        orderService.acceptOrder(orderId, user.getDriver().getDriverId());
+        orderService.acceptOrder(orderId, user.getUserId());
         return ResponseEntity.ok("배차가 성공적으로 완료되었습니다.");
     }
     
