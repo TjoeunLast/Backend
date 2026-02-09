@@ -1,5 +1,6 @@
 package com.example.project.member.domain;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import org.hibernate.annotations.UpdateTimestamp;
@@ -40,7 +41,7 @@ public class Driver {
     private String carType; // 차 종류
 
     @Column(name = "TONNAGE")
-    private Long tonnage;
+    private BigDecimal tonnage;
 
     @Column(name = "CAREER")
     private Long career; // 경력

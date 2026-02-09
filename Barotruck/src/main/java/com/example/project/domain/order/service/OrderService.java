@@ -1,16 +1,24 @@
 package com.example.project.domain.order.service;
 
-import com.example.project.domain.order.domain.Order;
-import com.example.project.domain.order.dto.OrderRequest;
-import com.example.project.domain.order.dto.OrderResponse; // 추가
-import com.example.project.domain.order.repository.OrderRepository;
-import com.example.project.member.domain.Users;
-import lombok.RequiredArgsConstructor;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.stream.Collectors;
+import com.example.project.domain.order.domain.AdminControl;
+import com.example.project.domain.order.domain.CancellationInfo;
+import com.example.project.domain.order.domain.Order;
+import com.example.project.domain.order.domain.embedded.OrderSnapshot;
+import com.example.project.domain.order.dto.OrderRequest;
+import com.example.project.domain.order.dto.OrderResponse; // 추가
+import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.member.domain.Driver;
+import com.example.project.member.domain.Users;
+import com.example.project.member.repository.DriverRepository;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -18,34 +26,13 @@ import java.util.stream.Collectors;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-
+    private final DriverRepository driverRepository; // 드라이버 정보 조회를 위한 레포지토리
     /**
      * 1. 화주: 오더 생성 (C)
      */
     public OrderResponse createOrder(Users user, OrderRequest request) {
-        // 엔티티 생성 시 request의 모든 필드를 매핑해줘야 null이 안 나옵니다.
-        Order order = Order.builder()
-                .user(user)
-                .startAddr(request.getStartAddr())
-                .startType(request.getStartType())
-                .startSchedule(request.getStartSchedule())
-                .endAddr(request.getEndAddr())
-                .endType(request.getEndType())
-                .endSchedule(request.getEndSchedule())
-                .cargoContent(request.getCargoContent())
-                .loadMethod(request.getLoadMethod())
-                .workType(request.getWorkType())
-                .tonnage(request.getTonnage())
-                .reqCarType(request.getReqCarType())
-                .reqTonnage(request.getReqTonnage())
-                .driveMode(request.getDriveMode())
-                .loadWeight(request.getLoadWeight())
-                .basePrice(request.getBasePrice())
-                .laborFee(request.getLaborFee())
-                .payMethod(request.getPayMethod())
-                .totalPrice(request.getBasePrice()) // 우선 기본가로 설정 (로직 추가 가능)
-                .status("REQUESTED")
-                .build();
+        // 엔티티 생성 로직을 엔티티 내부의 정적 메서드로 위임
+        Order order = Order.createOrder(user, request);
 
         Order savedOrder = orderRepository.save(order);
         return convertToResponse(savedOrder);
@@ -61,10 +48,7 @@ public class OrderService {
         if (!"REQUESTED".equals(order.getStatus())) {
             throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다.");
         }
-
-        // 상태 변경 및 차주 번호 할당 (Dirty Checking 활용)
-        // Order 엔티티에 @Setter가 없다면 아래 메서드를 엔티티에 추가하는 것을 권장합니다.
-        // order.accept(driverNo); 
+        order.assignDriver(driverNo, "ACCEPTED");
     }
 
     /**
@@ -90,37 +74,184 @@ public class OrderService {
     }
 
     
+    /**
+     * 관리자: 오더 강제 배차
+     */
+    public void forceAllocateOrder(Long orderId, Long driverId, String adminEmail, String reason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+
+        // 1. 오더 상태 및 차주 변경
+        order.assignDriver(driverId, "ALLOCATED");
+
+        // 2. 관리자 제어 기록 생성 및 연관관계 설정
+        AdminControl control = AdminControl.builder()
+                .isForced("Y")
+                .paidAdmin(adminEmail)
+                .paidReason(reason)
+                .allocated(LocalDateTime.now())
+                .build();
+        
+        order.setAdminControl(control); // Order 내부의 편의 메서드 활용
+        orderRepository.save(order);
+    }
+
+
+
+    /**
+     * 관리자: 전체 오더 목록 조회 (페이징 처리를 권장하지만, 일단 리스트로 구현)
+     */
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getAllOrdersForAdmin() {
+        return orderRepository.findAll().stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
     
+
     
     /**
-     * 엔티티를 OrderResponse DTO로 변환하는 내부 공통 메서드
+     * 오더 취소 공통 로직
      */
+    public void cancelOrder(Long orderId, String cancelReason, Users currentUser) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+
+        String role = determineCancelRole(order, currentUser); // 취소 주체 판별
+        
+        // 1. 상태별 취소 가능 여부 체크
+        validateCancelCondition(order, role);
+
+        // 2. 오더 상태 업데이트
+        String newStatus = "CANCELLED_BY_" + role;
+        order.cancelOrder(newStatus); //
+
+        // 3. 취소 정보 생성 및 연관관계 설정
+        CancellationInfo cancelInfo = CancellationInfo.builder()
+                .order(order)
+                .cancelReason(cancelReason)
+                .cancelledAt(LocalDateTime.now())
+                .cancelledBy(role)
+                .build();
+        
+        order.setCancellationInfo(cancelInfo); //
+        orderRepository.save(order);
+    }
+
+    private String determineCancelRole(Order order, Users user) {
+        if (user.getRole().name().equals("ADMIN")) return "ADMIN";
+        if (order.getUser().getUserId().equals(user.getUserId())) return "USER";
+        if (order.getDriverNo() != null && order.getDriverNo().equals(user.getUserId())) return "DRIVER";
+        throw new RuntimeException("취소 권한이 없습니다.");
+    }
+
+    private void validateCancelCondition(Order order, String role) {
+        if (role.equals("ADMIN")) return; // 관리자는 무조건 가능
+        
+        // 이미 완료된 오더는 취소 불가
+        if ("COMPLETED".equals(order.getStatus())) {
+            throw new RuntimeException("이미 완료된 오더는 취소할 수 없습니다.");
+        }
+        
+        // 운송 중(IN_TRANSIT)인 경우 일반 취소 불가 (관리자에게 문의해야 함)
+        if ("IN_TRANSIT".equals(order.getStatus())) {
+            throw new RuntimeException("운행 중인 오더는 직접 취소가 불가능합니다. 고객센터에 문의하세요.");
+        }
+    }
+    
+    public OrderResponse updateStatus(Long orderId, String newStatus, Long driverNo) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주문입니다."));
+
+        // 권한 검증: 이 오더를 배정받은 기사인지 확인
+        if (order.getDriverNo() == null || !order.getDriverNo().equals(driverNo)) {
+            throw new IllegalStateException("해당 주문의 담당 기사가 아닙니다.");
+        }
+
+        // 도메인 엔티티에 상태 변경 로직 위임
+        order.changeStatus(newStatus);
+
+        return OrderResponse.from(order);
+    }
+    
+    /**
+     * 드라이버 맞춤형 추천 오더 목록 조회
+     */
+    public List<OrderResponse> getRecommendedOrders(Long userId) {
+        // 1. 드라이버 프로필 조회
+        Driver driver = driverRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new RuntimeException("드라이버 프로필을 찾을 수 없습니다."));
+
+        // 2. 맞춤형 오더 조회
+        // 주의: driver.getTonnage() 필드가 BigDecimal 타입인지 확인하세요.
+        List<Order> recommendedOrders = orderRepository.findCustomOrders(
+                driver.getCarType(), 
+                driver.getTonnage() 
+        );
+
+        // 3. 응답 변환
+        return recommendedOrders.stream()
+                .map(OrderResponse::from)
+                .collect(Collectors.toList());
+    }
+    
+    
+    
     private OrderResponse convertToResponse(Order order) {
+        // 1. Embedded 객체 추출
+        OrderSnapshot snapshot = order.getSnapshot();
+        
+        // snapshot이 null일 경우를 대비한 방어 로직 (정상적인 주문이라면 null일 리 없지만 안전을 위해)
+        if (snapshot == null) {
+            throw new IllegalStateException("주문 상세 정보(Snapshot)가 존재하지 않습니다.");
+        }
+
         return OrderResponse.builder()
+                // 1. 주문 기본 정보 및 시스템 지표
                 .orderId(order.getOrderId())
                 .status(order.getStatus())
-                .createdAt(order.getCreatedAt())
-                .startAddr(order.getStartAddr())
-                .startType(order.getStartType())
-                .startSchedule(order.getStartSchedule())
-                .endAddr(order.getEndAddr())
-                .endType(order.getEndType())
-                .endSchedule(order.getEndSchedule())
-                .cargoContent(order.getCargoContent())
-                .loadMethod(order.getLoadMethod())
-                .workType(order.getWorkType())
-                .tonnage(order.getTonnage())
-                .reqCarType(order.getReqCarType())
-                .reqTonnage(order.getReqTonnage())
-                .driveMode(order.getDriveMode())
-                .loadWeight(order.getLoadWeight())
-                .basePrice(order.getBasePrice())
-                .laborFee(order.getLaborFee())
-                .payMethod(order.getPayMethod())
-                .totalPrice(order.getTotalPrice())
-                .driverNo(order.getDriverNo())
-                // UserSummary의 static factory method 활용 (비밀번호 자동 제외)
+                .distance(order.getDistance())
+                .duration(order.getDuration())
+                .createdAt(LocalDateTime.now())
+                .updated(order.getUpdated())
+
+                // 2. 상차지 정보 (Snapshot에서 추출)
+                .startAddr(snapshot.getStartAddr())
+                .startPlace(snapshot.getStartPlace())
+                .startType(snapshot.getStartType())
+                .startSchedule(snapshot.getStartSchedule())
+                .puProvince(snapshot.getPuProvince())
+
+                // 3. 하차지 정보 (Snapshot에서 추출)
+                .endAddr(snapshot.getEndAddr())
+                .endPlace(snapshot.getEndPlace())
+                .endType(snapshot.getEndType())
+                .endSchedule(snapshot.getEndSchedule())
+                .doProvince(snapshot.getDoProvince())
+
+                // 4. 화물 및 작업 정보 (Snapshot에서 추출)
+                .cargoContent(snapshot.getCargoContent())
+                .loadMethod(snapshot.getLoadMethod())
+                .workType(snapshot.getWorkType())
+                .tonnage(snapshot.getTonnage())
+                .reqCarType(snapshot.getReqCarType())
+                .reqTonnage(snapshot.getReqTonnage())
+                .driveMode(snapshot.getDriveMode())
+                .loadWeight(snapshot.getLoadWeight())
+
+                // 5. 요금 정보 (Snapshot에서 추출)
+                .basePrice(snapshot.getBasePrice())
+                .laborFee(snapshot.getLaborFee())
+                .packagingPrice(snapshot.getPackagingPrice())
+                .insuranceFee(snapshot.getInsuranceFee())
+                .payMethod(snapshot.getPayMethod())
+
+                // 6. 연관 객체 요약 정보
+                .cancellation(OrderResponse.CancellationSummary.from(order.getCancellationInfo()))
                 .user(OrderResponse.UserSummary.from(order.getUser()))
                 .build();
     }
+    
+    
+
 }

@@ -1,20 +1,23 @@
 package com.example.project.domain.order.domain;
 
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.hibernate.annotations.CreationTimestamp;
 
+import com.example.project.domain.order.domain.embedded.DriverTimeline;
+import com.example.project.domain.order.domain.embedded.OrderSnapshot;
+import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.review.domain.Report;
 import com.example.project.domain.review.domain.Review;
-import com.example.project.global.neighborhood.Neighborhood; // 지역코드 엔티티
+import com.example.project.domain.settlement.domain.Settlement;
 import com.example.project.member.domain.Users; // 사용자 엔티티
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -23,6 +26,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -51,91 +55,64 @@ public class Order {
     @JoinColumn(name = "USER_ID")
     private Users user;
 
-    // 상차지 정보
-    @Column(name = "START_ADDR", length = 500)
-    private String startAddr;
-
-    @Column(name = "START_TYPE")
-    private String startType; // 당상, 익상, 야간상차
-
-    @Column(name = "START_SCHEDULE", length = 20)
-    private String startSchedule;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "START_NBH_ID")
-    private Neighborhood startNeighborhood; // 상차지 지역코드 (FK)
-
-    // 하차지 정보
-    @Column(name = "END_ADDR", length = 500)
-    private String endAddr;
-
-    @Column(name = "END_TYPE")
-    private String endType; // 당착, 내착
-
-    @Column(name = "END_SCHEDULE", length = 20, nullable=true)
-    private String endSchedule;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "END_NBH_ID")
-    private Neighborhood endNeighborhood; // 하차지 지역코드 (FK)
-
-    // 화물 및 작업 정보
-    @Column(name = "CARGO_CONTENT", length = 500, nullable=true)
-    private String cargoContent;
-
-    @Column(name = "LOAD_METHOD", length = 50)
-    private String loadMethod; // 독차, 혼적
-
-    @Column(name = "WORK_TYPE", length = 50, nullable=true)
-    private String workType; // 지게차 상/하차, 수작업
-
-    @Column(name = "TONNAGE", precision = 4, scale = 1)
-    private BigDecimal tonnage;
-
-    @Column(name = "REQ_CAR_TYPE", length = 50, nullable=true)
-    private String reqCarType; // 윙바디, 카고 등
-
-    @Column(name = "REQ_TONNAGE", nullable=true)
-    private String reqTonnage;
-
-    @Column(name = "DRIVE_MODE", length = 20)
-    private String driveMode; // 편도, 왕복
-
-    @Column(name = "LOAD_WEIGHT")
-    private Long loadWeight;
-
-    // 요금 정보
-    @Column(name = "BASE_PRICE")
-    private Long basePrice;
-
-    @Column(name = "LABOR_FEE", nullable=true)
-    private Long laborFee;
-
-    @Column(name = "PAY_METHOD", length = 20)
-    private String payMethod; // 카드, 인수증 등
-
-    @Column(name = "FEE_RATE", nullable=true)
-    private Long feeRate;
-
-    @Column(name = "TOTAL_PRICE")
-    private Long totalPrice;
+ // 본문 정보 (한 번 정해지면 거의 안 바뀜)
+    @Embedded
+    private OrderSnapshot snapshot;
+    // 1. 거리 및 소요 시간 (물리적 지표)
+    @Column(name = "DISTANCE")
+    private Long distance; // 거리 (Field6)
+    
+    @Column(name = "DURATION")
+    private Long duration; // 소요시간 (Field7)
 
     // 상태 및 시간
     @Column(name = "STATUS", length = 30)
-    private String status = "REQUESTED"; // 기본값 설정
+    private String status = "REQUESTED"; // 기본값 설정 ACCEPTED, LOADING(상차지), IN_TRANSIT(이동중), UNLOADING(하차지), COMPLETED
 
-    @CreationTimestamp
-    @Column(name = "CREATED_AT", updatable = false)
-    private LocalDateTime createdAt;
+    // 4. 시스템 공통
+    @Column(name = "UPDATED")
+    private LocalDateTime updated; // 업데이트 일시 (Field8)
+
     
-    
- // Order.java 내부 추가
+    // Order.java 내부 추가
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     private List<Review> reviews = new ArrayList<>();
-
+    
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     private List<Report> reports = new ArrayList<>();
 
+ // [변경] 관리자 제어 (별도 테이블)
+    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private AdminControl adminControl;
+
+    // [변경] 취소 정보 (별도 테이블)
+    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private CancellationInfo cancellationInfo;
+    
+ // [변경] 결제/정산 정보 (Settlement로 이동)
+    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Settlement settlement;
+    
+    
+ // Order.java 내부에 추가
+    public void changeStatus(String newStatus) {
+        validateStatusTransition(newStatus); // 필요 시 상태 전환 규칙 검증 로직 추가
+        this.status = newStatus;
+        this.updated = LocalDateTime.now(); // 상태 변경 시 시간 갱신
+    }
+
+    /**
+     * 상태 변경 시 비즈니스 규칙 검증 (선택 사항)
+     */
+    private void validateStatusTransition(String nextStatus) {
+        // 예: COMPLETED 상태에서는 더 이상 변경 불가 등
+        if ("COMPLETED".equals(this.status)) {
+            throw new IllegalStateException("이미 완료된 주문은 상태를 변경할 수 없습니다.");
+        }
+        
+        // 이외에 ACCEPTED -> LOADING -> IN_TRANSIT 등의 순서 검증 로직을 넣을 수 있습니다.
+    }
+    
  // 리뷰 추가 편의 메서드
     public void addReview(Review review) {
         this.reviews.add(review);
@@ -166,7 +143,108 @@ public class Order {
             throw new IllegalStateException("해당 오더의 당사자가 아닙니다.");
         }
     }
+   
+    // 편의 메서드 수정
+    public void setSettlement(Settlement settlement) {
+        this.settlement = settlement;
+        if (settlement.getOrder() != this) settlement.setOrder(this);
+    }
+
+    public void setAdminControl(AdminControl adminControl) {
+        this.adminControl = adminControl;
+        if (adminControl.getOrder() != this) adminControl.setOrder(this);
+    }
+
+    public void setCancellationInfo(CancellationInfo cancellationInfo) {
+        this.cancellationInfo = cancellationInfo;
+        if (cancellationInfo.getOrder() != this) cancellationInfo.setOrder(this);
+    }
     
-    // 경유지는 별도 도메인으로 구현 예정이므로 여기서는 제외하거나 
-    // 일대다(OneToMany) 관계로 추후 추가 가능합니다.
+ // Order.java 내부에 추가
+    public void assignDriver(Long driverNo, String status) {
+        this.driverNo = driverNo;
+        this.status = status;
+        this.updated = LocalDateTime.now();
+    }
+
+    public void cancelOrder(String status) {
+        this.status = status;
+        this.updated = LocalDateTime.now();
+    }
+
+    // 2. 기사 타임라인 묶음
+    @Embedded
+    private DriverTimeline driverTimeline;
+
+ // Order.java 내부
+    @CreationTimestamp
+    @Column(name = "CREATED_AT", updatable = false)
+    private LocalDateTime createdAt; // 이 필드가 반드시 Order 엔티티 직속으로 있어야 합니다.
+
+    
+ // 응답용 내부 DTO
+    @Getter @AllArgsConstructor
+    public static class RouteStatisticsResponse {
+        private String startProvince;
+        private String endProvince;
+        private long orderCount;
+    }
+    
+    @Getter @AllArgsConstructor
+    public static class ProvinceStatResponse {
+        private String province;
+        private long count;
+    }
+ // --- 응답 DTO ---
+    @Getter @AllArgsConstructor
+    public static class RouteStatResponse {
+        private String startProvince;
+        private String endProvince;
+        private long count;
+    }
+
+    @Getter @AllArgsConstructor
+    public static class ProvinceAnalysisResponse {
+        private String province;
+        private long orderCount;
+        private long totalSales; // 해당 지역의 총 매출액
+    }
+    
+    public static Order createOrder(Users user, OrderRequest request) {
+        // 1. 변하지 않는 상세 정보를 한데 묶음
+        OrderSnapshot snapshot = OrderSnapshot.builder()
+                .startAddr(request.getStartAddr())
+                .startPlace(request.getStartPlace())
+                .startType(request.getStartType())
+                .startSchedule(request.getStartSchedule())
+                .puProvince(request.getPuProvince())
+                .endAddr(request.getEndAddr())
+                .endPlace(request.getEndPlace())
+                .endType(request.getEndType())
+                .endSchedule(request.getEndSchedule())
+                .doProvince(request.getDoProvince())
+                .cargoContent(request.getCargoContent())
+                .loadMethod(request.getLoadMethod())
+                .workType(request.getWorkType())
+                .tonnage(request.getTonnage())
+                .reqCarType(request.getReqCarType())
+                .reqTonnage(request.getReqTonnage())
+                .driveMode(request.getDriveMode())
+                .loadWeight(request.getLoadWeight())
+                .basePrice(request.getBasePrice())
+                .laborFee(request.getLaborFee())
+                .packagingPrice(request.getPackagingPrice())
+                .insuranceFee(request.getInsuranceFee())
+                .payMethod(request.getPayMethod())
+                .build();
+
+        // 2. 최종 Order 객체 생성
+        return Order.builder()
+                .user(user)
+                .snapshot(snapshot) // 묶은 덩어리를 한 번에 주입
+                .distance(request.getDistance())
+                .duration(request.getDuration())
+                .status("REQUESTED")
+                .build();
+    }
 }
