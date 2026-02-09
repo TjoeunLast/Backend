@@ -24,8 +24,9 @@ public class SettlementController {
 
     // 결제 요청 생성
     @PostMapping("/init")
-    public ResponseEntity<String> init(@RequestBody SettlementRequest request, 
-                                      @AuthenticationPrincipal Users user) {
+    public ResponseEntity<String> init(
+    		@RequestBody SettlementRequest request,                           
+    		@AuthenticationPrincipal Users user) {
         settlementService.initiateSettlement(request, user);
         return ResponseEntity.ok("결제 준비가 완료되었습니다.");
     }
