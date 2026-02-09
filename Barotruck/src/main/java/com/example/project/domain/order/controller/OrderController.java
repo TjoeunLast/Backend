@@ -81,7 +81,7 @@ public class OrderController {
             @AuthenticationPrincipal Users userDetails) {
         
         // 현재 로그인한 사용자가 드라이버인지 권한 체크가 필요할 수 있습니다.
-        OrderResponse response = orderService.updateStatus(orderId, newStatus, userDetails.getUserId());
+        OrderResponse response = orderService.updateStatus(orderId, newStatus, userDetails.getDriver().getDriverId());
         return ResponseEntity.ok(response);
     }
     
