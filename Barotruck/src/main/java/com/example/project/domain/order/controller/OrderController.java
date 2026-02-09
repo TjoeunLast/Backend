@@ -1,7 +1,9 @@
 package com.example.project.domain.order.controller;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
+import com.example.project.domain.order.dto.orderRequest.FareRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -84,5 +86,10 @@ public class OrderController {
         OrderResponse response = orderService.updateStatus(orderId, newStatus, userDetails.getDriver().getDriverId());
         return ResponseEntity.ok(response);
     }
-    
+
+    @PostMapping("/fare")
+    public ResponseEntity<Long> estimateFare(@RequestBody FareRequest request) {
+        long fare = orderService.estimateFare(request);
+        return ResponseEntity.ok(fare);
+    }
 }
