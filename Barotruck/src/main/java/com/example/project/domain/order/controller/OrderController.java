@@ -1,7 +1,12 @@
 package com.example.project.domain.order.controller;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
+import com.example.project.domain.order.dto.orderResponse.AssignedDriverInfoResponse;
+import com.example.project.domain.order.dto.orderRequest.FareRequest;
+import com.example.project.domain.order.service.orderService.FareService;
+import com.example.project.domain.order.service.orderService.OrderDriverQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +31,9 @@ import lombok.RequiredArgsConstructor;
 public class OrderController {
 
     private final OrderService orderService;
+    private final FareService fareService;
+    private final OrderDriverQueryService orderDriverQueryService;
+
 
     // 화주: 신규 오더 요청 (반환 타입을 OrderResponse로 변경)
     @PostMapping
@@ -96,4 +104,20 @@ public class OrderController {
         return ResponseEntity.ok(orders);
     }
     
+
+    @PostMapping("/fare")
+    public ResponseEntity<Long> estimateFare(@RequestBody FareRequest request) {
+        long fare = fareService.estimateFare(request);
+        return ResponseEntity.ok(fare);
+    }
+
+
+    // 배정된 차주 정보 확인 (조회 전용)
+    @GetMapping("/{driverNo}/assigned-info")
+    public ResponseEntity<AssignedDriverInfoResponse> getAssignedDriver(
+            @PathVariable("driverNo") Long driverNo
+    ) {
+        return ResponseEntity.ok(orderDriverQueryService.getAssignedDriverInfo(driverNo));
+    }
+
 }

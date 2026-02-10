@@ -1,9 +1,13 @@
 package com.example.project.domain.order.service;
 
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.example.project.domain.order.domain.FarePolicy;
+import com.example.project.domain.order.dto.orderRequest.FareRequest;
+import com.example.project.domain.order.repository.FareRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -271,7 +275,7 @@ public class OrderService {
                 .user(OrderResponse.UserSummary.from(order.getUser()))
                 .build();
     }
-    
-    
+
+
 
 }
