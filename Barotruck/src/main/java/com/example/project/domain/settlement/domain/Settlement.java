@@ -87,4 +87,5 @@ public class Settlement {
         if (this.totalPrice == null || this.feeRate == null) return 0L;
         return (this.totalPrice * this.feeRate) / 100;
     }
+    
 }

@@ -48,8 +48,9 @@ public class SecurityConfiguration {
             "/js/**",
             "/api/recipes/**",
             "/api/receipt/**",
-            "/api/v1/shippers",
-            "/api/v1/drivers",
+            "/api/v1/shippers/**",
+            "/api/v1/drivers/**",
+            "/api/proof/**",
             "/api/v1/orders", // 오더
             "/api/notifications/**",  // 알림
             "/api/reports/**", // 신고 

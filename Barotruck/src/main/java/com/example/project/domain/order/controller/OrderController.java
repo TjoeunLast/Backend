@@ -1,7 +1,12 @@
 package com.example.project.domain.order.controller;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
+import com.example.project.domain.order.dto.orderResponse.AssignedDriverInfoResponse;
+import com.example.project.domain.order.dto.orderRequest.FareRequest;
+import com.example.project.domain.order.service.orderService.FareService;
+import com.example.project.domain.order.service.orderService.OrderDriverQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +31,9 @@ import lombok.RequiredArgsConstructor;
 public class OrderController {
 
     private final OrderService orderService;
+    private final FareService fareService;
+    private final OrderDriverQueryService orderDriverQueryService;
+
 
     // 화주: 신규 오더 요청 (반환 타입을 OrderResponse로 변경)
     @PostMapping
@@ -59,15 +67,15 @@ public class OrderController {
     public ResponseEntity<String> accept(
             @PathVariable("orderId") Long orderId, 
             @AuthenticationPrincipal Users user) {
-        orderService.acceptOrder(orderId, user.getDriver().getDriverId());
+        orderService.acceptOrder(orderId, user.getUserId());
         return ResponseEntity.ok("배차가 성공적으로 완료되었습니다.");
     }
     
  // OrderController.java 내부에 추가
     @PatchMapping("/{orderId}/cancel")
     public ResponseEntity<String> cancel(
-            @PathVariable Long orderId,
-            @RequestParam String reason,
+            @PathVariable("orderId") Long orderId,
+            @RequestParam("reason") String reason,
             @AuthenticationPrincipal Users user) {
         orderService.cancelOrder(orderId, reason, user);
         return ResponseEntity.ok("오더 취소가 완료되었습니다.");
@@ -76,8 +84,8 @@ public class OrderController {
     // 차주가 상태 변경하는 함수 운행중 운행완료 기타 등등...
     @PatchMapping("/{orderId}/status")
     public ResponseEntity<OrderResponse> updateOrderStatus(
-            @PathVariable Long orderId,
-            @RequestParam String newStatus,
+            @PathVariable("orderId") Long orderId,
+            @RequestParam("newStatus") String newStatus,
             @AuthenticationPrincipal Users userDetails) {
         
         // 현재 로그인한 사용자가 드라이버인지 권한 체크가 필요할 수 있습니다.
@@ -85,4 +93,31 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
     
+    /**
+     * 차주 전용: 현재 내가 배차받아 운행 중인 오더 목록 조회
+     * 대상 상태: ACCEPTED, LOADING, IN_TRANSIT, UNLOADING
+     */
+    @GetMapping("/my-driving")
+    public ResponseEntity<List<OrderResponse>> getMyDrivingOrders(@AuthenticationPrincipal Users user) {
+        // 현재 로그인한 사용자의 ID와 특정 상태값들을 서비스로 전달
+        List<OrderResponse> orders = orderService.findMyDrivingOrders(user.getUserId());
+        return ResponseEntity.ok(orders);
+    }
+    
+
+    @PostMapping("/fare")
+    public ResponseEntity<Long> estimateFare(@RequestBody FareRequest request) {
+        long fare = fareService.estimateFare(request);
+        return ResponseEntity.ok(fare);
+    }
+
+
+    // 배정된 차주 정보 확인 (조회 전용)
+    @GetMapping("/{driverNo}/assigned-info")
+    public ResponseEntity<AssignedDriverInfoResponse> getAssignedDriver(
+            @PathVariable("driverNo") Long driverNo
+    ) {
+        return ResponseEntity.ok(orderDriverQueryService.getAssignedDriverInfo(driverNo));
+    }
+
 }
