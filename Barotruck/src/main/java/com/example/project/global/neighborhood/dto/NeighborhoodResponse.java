@@ -1,5 +1,6 @@
-package com.example.project.global.neighborhood;
+package com.example.project.global.neighborhood.dto;
 
+import com.example.project.global.neighborhood.Neighborhood;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -19,4 +20,5 @@ public class NeighborhoodResponse {
                 .fullName(neighborhood.getCityName() + " " + neighborhood.getDisplayName())
                 .build();
     }
+
 }
