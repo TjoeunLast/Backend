@@ -18,6 +18,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.authentication.logout.LogoutHandler;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.cors.CorsConfiguration;
+
+import java.util.Collections;
 
 @Configuration
 @EnableWebSecurity
@@ -95,6 +98,14 @@ public class SecurityConfiguration {
                                 .addLogoutHandler(logoutHandler)
                                 .logoutSuccessHandler((request, response, authentication) -> SecurityContextHolder.clearContext())
                 )
+                .cors(cors -> cors.configurationSource(request -> {
+                    CorsConfiguration config = new CorsConfiguration();
+                    config.setAllowedOriginPatterns(Collections.singletonList("*"));
+                    config.setAllowedMethods(Collections.singletonList("*"));
+                    config.setAllowedHeaders(Collections.singletonList("*"));
+                    config.setAllowCredentials(true);
+                    return config;
+                }))
         ;
 
         return http.build();
