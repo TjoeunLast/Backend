@@ -59,4 +59,19 @@ public class NoticeService {
     public void deleteNotice(Long id) {
         noticeRepository.deleteById(id);
     }
+
+    // 공지 상세 조회
+    public NoticeResponse getNoticeDetail(Long id) {
+        Notice n = noticeRepository.findByIdWithAdmin(id)
+                .orElseThrow(() -> new IllegalArgumentException("해당 공지가 없습니다."));
+
+        return NoticeResponse.builder()
+                .noticeId(n.getNoticeId())
+                .title(n.getTitle())
+                .content(n.getContent())
+                .isPinned(n.getIsPinned())
+                .adminName(n.getAdmin() != null ? n.getAdmin().getNickname() : "관리자")
+                .createdAt(n.getCreatedAt())
+                .build();
+    }
 }

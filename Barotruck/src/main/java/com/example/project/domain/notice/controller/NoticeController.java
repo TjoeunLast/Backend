@@ -33,6 +33,12 @@ public class NoticeController {
         return ResponseEntity.ok(noticeService.getAllNotices());
     }
 
+    // 추가: 공지사항 상세 조회 (누구나 가능)
+    @GetMapping("/{id}")
+    public ResponseEntity<NoticeResponse> detail(@PathVariable Long id) {
+        return ResponseEntity.ok(noticeService.getNoticeDetail(id));
+    }
+
     // 공지사항 작성 (관리자만)
     @PostMapping
     @PreAuthorize("hasAuthority('ADMIN')")
