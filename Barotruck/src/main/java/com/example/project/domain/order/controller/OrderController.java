@@ -92,6 +92,18 @@ public class OrderController {
         OrderResponse response = orderService.updateStatus(orderId, newStatus, userDetails.getUserId());
         return ResponseEntity.ok(response);
     }
+    
+    /**
+     * 차주 전용: 현재 내가 배차받아 운행 중인 오더 목록 조회
+     * 대상 상태: ACCEPTED, LOADING, IN_TRANSIT, UNLOADING
+     */
+    @GetMapping("/my-driving")
+    public ResponseEntity<List<OrderResponse>> getMyDrivingOrders(@AuthenticationPrincipal Users user) {
+        // 현재 로그인한 사용자의 ID와 특정 상태값들을 서비스로 전달
+        List<OrderResponse> orders = orderService.findMyDrivingOrders(user.getUserId());
+        return ResponseEntity.ok(orders);
+    }
+    
 
     @PostMapping("/fare")
     public ResponseEntity<Long> estimateFare(@RequestBody FareRequest request) {

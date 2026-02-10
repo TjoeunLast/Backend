@@ -182,6 +182,22 @@ public class OrderService {
         return OrderResponse.from(order);
     }
     
+    public List<OrderResponse> findMyDrivingOrders(Long driverId) {
+        // 운행 중으로 간주되는 상태 리스트 정의
+    	List<String> drivingStatuses = List.of(
+                "ACCEPTED",   // 배차확정
+                "LOADING",    // 상차중
+                "IN_TRANSIT",  // 이동중
+                "UNLOADING"   // 하차중
+            );
+
+    	// 리포지토리를 통해 해당 차주 ID와 상태 목록에 해당하는 오더 조회
+        return orderRepository.findByDriverNoAndStatusIn(driverId, drivingStatuses)
+                .stream()
+                .map(OrderResponse::from) // 엔티티 -> DTO 변환
+                .collect(Collectors.toList());
+    }
+    
     /**
      * 드라이버 맞춤형 추천 오더 목록 조회
      */
