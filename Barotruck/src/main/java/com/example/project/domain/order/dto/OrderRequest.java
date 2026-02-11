@@ -45,6 +45,9 @@ public class OrderRequest {
     private Long insuranceFee;     // 적재물 보험료 (고가 화물일 경우 추가되는 보험 비용)
     private String payMethod;      // 결제 방식 (예: 신용카드, 계좌이체, 인수증/후불, 선불)
 
+    private boolean instant; // 즉시배차 , 배정배차
+
+    
     // --- [시스템 계산 지표: 지도 API 연동 결과] ---
     private Long distance;         // 예상 주행 거리 (단위: 미터 또는 킬로미터)
     private Long duration;         // 예상 소요 시간 (단위: 초 또는 분)
