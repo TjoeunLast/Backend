@@ -1,12 +1,7 @@
 package com.example.project.domain.order.controller;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
-import com.example.project.domain.order.dto.orderResponse.AssignedDriverInfoResponse;
-import com.example.project.domain.order.dto.orderRequest.FareRequest;
-import com.example.project.domain.order.service.orderService.FareService;
-import com.example.project.domain.order.service.orderService.OrderDriverQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,7 +15,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse; // DTO 임포트
+import com.example.project.domain.order.dto.orderRequest.FareRequest;
+import com.example.project.domain.order.dto.orderResponse.AssignedDriverInfoResponse;
 import com.example.project.domain.order.service.OrderService;
+import com.example.project.domain.order.service.orderService.FareService;
+import com.example.project.domain.order.service.orderService.OrderDriverQueryService;
 import com.example.project.member.domain.Users;
 
 import lombok.RequiredArgsConstructor;
@@ -118,6 +117,32 @@ public class OrderController {
             @PathVariable("driverNo") Long driverNo
     ) {
         return ResponseEntity.ok(orderDriverQueryService.getAssignedDriverInfo(driverNo));
+    }
+    
+    
+    /**
+     * 1. 특정 오더에 신청한 차주 리스트 조회 API
+     * GET /api/v1/shipper/orders/{orderId}/applicants
+     */
+    @GetMapping("/{orderId}/applicants")
+    public ResponseEntity<List<AssignedDriverInfoResponse>> getApplicants(
+            @PathVariable("orderId") Long orderId) {
+        List<AssignedDriverInfoResponse> applicants = orderDriverQueryService.getApplicantsInfo(orderId);
+        return ResponseEntity.ok(applicants);
+    }
+
+    /**
+     * 2. 화주가 차주를 최종 선택(배차 확정)하는 API
+     * POST /api/v1/shipper/orders/{orderId}/select-driver
+     */
+    @PostMapping("/{orderId}/select-driver")
+    public ResponseEntity<String> selectDriver(
+            @PathVariable("orderId") Long orderId,
+            @RequestParam("driverNo") Long driverNo, // 선택된 차주의 ID
+            @AuthenticationPrincipal Users user) { // 로그인한 화주의 ID
+        
+        orderService.selectDriver(orderId, driverNo, user.getUserId());
+        return ResponseEntity.ok("배차가 성공적으로 확정되었습니다.");
     }
 
 }

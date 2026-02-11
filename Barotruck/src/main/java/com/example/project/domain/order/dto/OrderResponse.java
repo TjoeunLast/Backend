@@ -54,6 +54,9 @@ public class OrderResponse {
     private Long insuranceFee;
     private String payMethod;
     
+    private boolean instant; // 즉시배차 , 배정배차
+
+
     // 시스템 지표
     private Long distance;
     private Long duration;
@@ -96,6 +99,7 @@ public class OrderResponse {
                 .packagingPrice(s.getPackagingPrice())
                 .insuranceFee(s.getInsuranceFee())
                 .payMethod(s.getPayMethod())
+                .instant(s.isInstant())
                 // 요약 정보
                 .user(UserSummary.from(order.getUser()))
                 .cancellation(CancellationSummary.from(order.getCancellationInfo()))
