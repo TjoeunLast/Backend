@@ -298,6 +298,8 @@ public class OrderService {
                 .insuranceFee(snapshot.getInsuranceFee())
                 .payMethod(snapshot.getPayMethod())
                 .instant(snapshot.isInstant())
+                .memo(snapshot.getMemo())
+                .tag(snapshot.getTag())
 
                 // 6. 연관 객체 요약 정보
                 .cancellation(OrderResponse.CancellationSummary.from(order.getCancellationInfo()))

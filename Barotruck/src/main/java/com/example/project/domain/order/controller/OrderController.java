@@ -125,7 +125,7 @@ public class OrderController {
     
     /**
      * 1. 특정 오더에 신청한 차주 리스트 조회 API
-     * GET /api/v1/shipper/orders/{orderId}/applicants
+     * GET /api/v1/orders/{orderId}/applicants
      */
     @GetMapping("/{orderId}/applicants")
     public ResponseEntity<List<AssignedDriverInfoResponse>> getApplicants(
@@ -136,7 +136,7 @@ public class OrderController {
 
     /**
      * 2. 화주가 차주를 최종 선택(배차 확정)하는 API
-     * POST /api/v1/shipper/orders/{orderId}/select-driver
+     * POST /api/v1/orders/{orderId}/select-driver
      */
     @PostMapping("/{orderId}/select-driver")
     public ResponseEntity<String> selectDriver(

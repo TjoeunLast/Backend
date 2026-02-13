@@ -2,6 +2,7 @@ package com.example.project.domain.order.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.domain.embedded.OrderSnapshot;
@@ -55,7 +56,9 @@ public class OrderResponse {
     private String payMethod;
     
     private boolean instant; // 즉시배차 , 배정배차
-
+    private String memo;
+    private List<String> tag;
+    
 
     // 시스템 지표
     private Long distance;
@@ -100,6 +103,8 @@ public class OrderResponse {
                 .insuranceFee(s.getInsuranceFee())
                 .payMethod(s.getPayMethod())
                 .instant(s.isInstant())
+                .memo(s.getMemo())
+                .tag(s.getTag())
                 // 요약 정보
                 .user(UserSummary.from(order.getUser()))
                 .cancellation(CancellationSummary.from(order.getCancellationInfo()))

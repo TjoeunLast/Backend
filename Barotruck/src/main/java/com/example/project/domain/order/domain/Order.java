@@ -78,6 +78,8 @@ public class Order {
     @Column(name = "DURATION")
     private Long duration; // 소요시간 (Field7)
 
+   
+    
     // 상태 및 시간
     @Column(name = "STATUS", length = 30)
     private String status = "REQUESTED"; // 기본값 설정 ACCEPTED, LOADING(상차지), IN_TRANSIT(이동중), UNLOADING(하차지), COMPLETED
@@ -272,6 +274,8 @@ public class Order {
                 .insuranceFee(request.getInsuranceFee())
                 .payMethod(request.getPayMethod())
                 .instant(request.isInstant())
+                .memo(request.getMemo())
+                .tag(request.getTag())
                 .build();
 
         // 2. 최종 Order 객체 생성
