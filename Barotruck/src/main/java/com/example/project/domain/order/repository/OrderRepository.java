@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import com.example.project.domain.order.domain.FarePolicy;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,7 +16,7 @@ import com.example.project.domain.order.domain.Order;
 import com.example.project.member.domain.Users;
 
 @Repository
-public interface OrderRepository extends JpaRepository<Order, Long> {
+public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
     // 화주: 자신이 올린 요청 목록 조회
     List<Order> findByUserOrderByCreatedAtDesc(Users user);
 
