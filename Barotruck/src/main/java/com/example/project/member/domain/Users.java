@@ -52,6 +52,9 @@ public class Users implements UserDetails {
     private Long userId;
 
     @Column(length = 50)
+    private String name;
+    
+    @Column(length = 50)
     private String nickname;
 
     @Column(length = 1)

@@ -11,6 +11,7 @@ import lombok.Getter;
 public class UserResponseDto {
     private Long userId;
     private String email;
+    private String name;
     private String nickname;
     private String profileImageUrl;
     private String phone;
@@ -24,6 +25,7 @@ public class UserResponseDto {
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .nickname(user.getNickname() != null ? user.getNickname() : "")
+                .name(user.getName())
                 .profileImageUrl(user.getProfileImage() != null ? user.getProfileImage().getImageUrl() : "")
                 .phone(user.getPhone())
                 .ratingAvg(user.getRatingAvg())

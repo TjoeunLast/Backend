@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import com.example.project.domain.chat.dto.ChatMessageRequest;
 import com.example.project.domain.chat.dto.ChatMessageResponse;
 import com.example.project.domain.chat.service.ChatService;
+import com.example.project.member.domain.Users;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,8 +30,11 @@ public class ChatMessageController {
      * 목적지: /pub/chat/message
      */
     @MessageMapping("/chat/message")
-    public void sendMessage(@Payload ChatMessageRequest request) {
-        // DB 저장 (이미 구현하신 서비스 호출)
+    public void sendMessage(
+    		@Payload ChatMessageRequest request
+    		
+    		) {
+    	
         ChatMessageResponse response = chatService.saveMessage(request);
         
         // 해당 방을 구독 중인 모든 유저에게 메시지 뿌리기

@@ -1,6 +1,7 @@
 package com.example.project.domain.order.domain.embedded;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import com.example.project.global.neighborhood.Neighborhood;
 
@@ -72,6 +73,11 @@ public class OrderSnapshot {
     private Long packagingPrice;
     private Long insuranceFee;
     private String payMethod;
+    
+    
+    // 메모 및 태그
+    private String memo;
+    private List<String> tag;
     
     private boolean instant;
 }
