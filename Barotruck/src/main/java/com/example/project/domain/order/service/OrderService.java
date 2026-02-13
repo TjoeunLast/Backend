@@ -52,11 +52,16 @@ public class OrderService {
         if (!"REQUESTED".equals(order.getStatus())) {
             throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다.");
         }
+        
         System.out.println("--------------------------------------");
         System.out.println(driverNo);
         System.out.println("--------------------------------------");
+        if(order.getSnapshot().isInstant()) {
+        	order.assignDriver(driverNo, "ACCEPTED");
+        }else {
+        	order.addToDriverList(driverNo);	
+        }
 
-        order.assignDriver(driverNo, "ACCEPTED");
     }
 
     /**
@@ -219,6 +224,29 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
     
+    @Transactional
+    public void selectDriver(Long orderId, Long selectedDriverNo, Long currentUserId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("해당 오더가 존재하지 않습니다."));
+
+        // 1. 보안 체크: 요청자가 해당 오더의 주인(화주)인지 확인
+        if (!order.getUser().getUserId().equals(currentUserId)) {
+            throw new RuntimeException("해당 오더를 관리할 권한이 없습니다.");
+        }
+
+        // 2. 상태 체크: 아직 요청 중인 상태인지 확인
+        if (!"REQUESTED".equals(order.getStatus())) {
+            throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다.");
+        }
+
+        // 3. 선택한 기사가 신청자 명단에 있는지 확인 및 최종 확정
+        // 아까 Order 엔티티에 만들었던 confirmDriver 편의 메서드 활용
+        order.confirmDriver(selectedDriverNo);
+        
+        // 4. 선택되지 않은 나머지 신청자 명단은 비워주기 (선택 사항)
+        order.getDriverList().clear();
+    }
+    
     
     
     private OrderResponse convertToResponse(Order order) {
@@ -269,6 +297,7 @@ public class OrderService {
                 .packagingPrice(snapshot.getPackagingPrice())
                 .insuranceFee(snapshot.getInsuranceFee())
                 .payMethod(snapshot.getPayMethod())
+                .instant(snapshot.isInstant())
 
                 // 6. 연관 객체 요약 정보
                 .cancellation(OrderResponse.CancellationSummary.from(order.getCancellationInfo()))

@@ -72,4 +72,6 @@ public class OrderSnapshot {
     private Long packagingPrice;
     private Long insuranceFee;
     private String payMethod;
+    
+    private boolean instant;
 }

@@ -16,7 +16,9 @@ import com.example.project.domain.settlement.domain.Settlement;
 import com.example.project.member.domain.Users; // 사용자 엔티티
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -50,6 +52,17 @@ public class Order {
     @Column(name = "DRIVER_NO", nullable=true)
     private Long driverNo;
 
+ // 1. 배차를 희망하는 기사들의 ID 목록 (신청자 명단)
+    @ElementCollection
+    @CollectionTable(
+        name = "ORDER_DRIVER_LIST", // 별도의 보조 테이블 생성
+        joinColumns = @JoinColumn(name = "ORDER_ID")
+    )
+    @Column(name = "DRIVER_ID")
+    @Builder.Default
+    private List<Long> driverList = new ArrayList<>();
+    
+    
     // 화주 (userId - FK)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "USER_ID")
@@ -210,6 +223,28 @@ public class Order {
         private long totalSales; // 해당 지역의 총 매출액
     }
     
+    /**
+     * 기사가 배차 신청을 했을 때 목록에 추가
+     */
+    public void addToDriverList(Long driverId) {
+        if (!this.driverList.contains(driverId)) {
+            this.driverList.add(driverId);
+        }
+    }
+
+    /**
+     * 목록에 있는 기사 중 한 명을 최종 배정
+     */
+    public void confirmDriver(Long selectedDriverId) {
+        if (this.driverList.contains(selectedDriverId)) {
+            this.driverNo = selectedDriverId;
+            this.changeStatus("ACCEPTED"); // 상태를 배차 완료로 변경
+        } else {
+            throw new IllegalArgumentException("신청자 명단에 없는 기사입니다.");
+        }
+    }
+    
+    
     public static Order createOrder(Users user, OrderRequest request) {
         // 1. 변하지 않는 상세 정보를 한데 묶음
         OrderSnapshot snapshot = OrderSnapshot.builder()
@@ -236,6 +271,7 @@ public class Order {
                 .packagingPrice(request.getPackagingPrice())
                 .insuranceFee(request.getInsuranceFee())
                 .payMethod(request.getPayMethod())
+                .instant(request.isInstant())
                 .build();
 
         // 2. 최종 Order 객체 생성
