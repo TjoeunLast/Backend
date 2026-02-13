@@ -59,6 +59,7 @@ public class SecurityConfiguration {
             "/api/v1/auth/sms",
             "/swagger-ui/index.html",
             "/api/auth/sms",	// sms
+            "/api/v1/admin/user/**",
             
             
     };
