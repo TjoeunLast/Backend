@@ -8,6 +8,7 @@ import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.domain.embedded.OrderSnapshot;
 import com.example.project.global.image.ImageInfo;
 import com.example.project.security.user.Role;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +22,10 @@ import lombok.NoArgsConstructor;
 public class OrderResponse {
     private Long orderId;
     private String status;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
+    
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updated;
 
     // 상차지
