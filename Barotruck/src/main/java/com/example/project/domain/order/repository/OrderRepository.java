@@ -127,5 +127,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     
  // status가 String인 경우에도 In 키워드로 목록 조회가 가능합니다. 배차 현황중인 오더목록 볼수있는 (차주입장에서)
     List<Order> findByDriverNoAndStatusIn(Long driverNo, List<String> statuses); 
+ 
+    List<Order> findByUser_UserIdOrderByCreatedAtDesc(Long userId);
+    
     
 }
