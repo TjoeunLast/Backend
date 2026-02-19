@@ -45,7 +45,7 @@ public class UsersService {
         Users user = repository.findByEmail(principal.getName())
                 .orElseThrow(() -> new RuntimeException("유저 정보를 찾을 수 없습니다."));
 
-        user.setDelflag("Y");
+        user.setDelflag("A");
         user.setDeletedate(LocalDate.now());
         repository.save(user);
     }
@@ -56,6 +56,10 @@ public class UsersService {
     public void restoreUser(Principal principal) {
         Users user = repository.findByEmail(principal.getName())
                 .orElseThrow(() -> new RuntimeException("유저 정보를 찾을 수 없습니다."));
+
+        if ("A".equals(user.getDelflag())) {
+            throw new IllegalStateException("관리자에 의해 탈퇴된 계정은 복구할 수 없습니다.");
+        }
 
         user.setDelflag("N");
         user.setDeletedate(null);

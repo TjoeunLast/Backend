@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import com.example.project.domain.order.domain.FarePolicy;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,7 +16,7 @@ import com.example.project.domain.order.domain.Order;
 import com.example.project.member.domain.Users;
 
 @Repository
-public interface OrderRepository extends JpaRepository<Order, Long> {
+public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
     // 화주: 자신이 올린 요청 목록 조회
     List<Order> findByUserOrderByCreatedAtDesc(Users user);
 
@@ -126,5 +127,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     
  // status가 String인 경우에도 In 키워드로 목록 조회가 가능합니다. 배차 현황중인 오더목록 볼수있는 (차주입장에서)
     List<Order> findByDriverNoAndStatusIn(Long driverNo, List<String> statuses); 
+ 
+    List<Order> findByUser_UserIdOrderByCreatedAtDesc(Long userId);
+    
     
 }

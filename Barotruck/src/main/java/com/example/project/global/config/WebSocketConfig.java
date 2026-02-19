@@ -20,7 +20,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // Flutter에서 연결할 엔드포인트: ws://서버주소:8080/ws-stomp
         registry.addEndpoint("/ws-stomp")
-                .setAllowedOriginPatterns("*"); // 테스트를 위해 모든 오리진 허용
+                .setAllowedOriginPatterns("*") // 테스트를 위해 모든 오리진 허용
+        		.withSockJS(); // ✨ 핵심: 이 설정이 있어야 /info 요청을 처리합니다.
         // 보안상 특정 도메인만 허용해야 하지만, 개발 중에는 Flutter 앱이나 웹에서 자유롭게 접근할 수 있도록 모든 경로를 허용하는 설정입니다.
     }
 

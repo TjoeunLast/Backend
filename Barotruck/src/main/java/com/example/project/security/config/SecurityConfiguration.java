@@ -62,6 +62,7 @@ public class SecurityConfiguration {
             "/api/v1/auth/sms",
             "/swagger-ui/index.html",
             "/api/auth/sms",	// sms
+            "/api/v1/admin/user/**",
             
             
     };
@@ -80,7 +81,6 @@ public class SecurityConfiguration {
                                 .requestMatchers("/ws-stomp/**").permitAll() // 웹소켓 핸드쉐이크 허용
                                 .requestMatchers(GET, "/api/route/**").permitAll()
                                 .requestMatchers("/api/ocr/**").permitAll()
-                                .requestMatchers("/api/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/notices/**").permitAll() // 공지는 누구나 조회 가능
                                 .requestMatchers("/api/admin/**").hasRole("ADMIN") // 관리자 전용 API
                                 
@@ -88,6 +88,7 @@ public class SecurityConfiguration {
                                 // 이렇게 설정해야 @AuthenticationPrincipal에 데이터가 정상적으로 들어옵니다.
                                 .requestMatchers("/api/chat/**").authenticated()
                                 .requestMatchers("/api/user/**").authenticated() // 유저 정보 관련 추가
+                                .requestMatchers("/api/**").permitAll()
                                 
                                 .anyRequest().authenticated() // 그 외 모든 요청은 인증 필요
                 )

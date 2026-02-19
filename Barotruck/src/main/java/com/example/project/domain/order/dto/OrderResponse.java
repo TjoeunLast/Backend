@@ -2,11 +2,13 @@ package com.example.project.domain.order.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.domain.embedded.OrderSnapshot;
 import com.example.project.global.image.ImageInfo;
 import com.example.project.security.user.Role;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,7 +22,10 @@ import lombok.NoArgsConstructor;
 public class OrderResponse {
     private Long orderId;
     private String status;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
+    
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updated;
 
     // 상차지
@@ -55,7 +60,9 @@ public class OrderResponse {
     private String payMethod;
     
     private boolean instant; // 즉시배차 , 배정배차
-
+    private String memo;
+    private List<String> tag;
+    
 
     // 시스템 지표
     private Long distance;
@@ -100,6 +107,8 @@ public class OrderResponse {
                 .insuranceFee(s.getInsuranceFee())
                 .payMethod(s.getPayMethod())
                 .instant(s.isInstant())
+                .memo(s.getMemo())
+                .tag(s.getTag())
                 // 요약 정보
                 .user(UserSummary.from(order.getUser()))
                 .cancellation(CancellationSummary.from(order.getCancellationInfo()))

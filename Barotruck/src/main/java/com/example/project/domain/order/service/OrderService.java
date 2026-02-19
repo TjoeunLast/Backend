@@ -1,13 +1,10 @@
 package com.example.project.domain.order.service;
 
-import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.example.project.domain.order.domain.FarePolicy;
-import com.example.project.domain.order.dto.orderRequest.FareRequest;
-import com.example.project.domain.order.repository.FareRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -248,6 +245,19 @@ public class OrderService {
     }
     
     
+    /**
+     * 화주 전용: 본인이 생성한 오더 목록 조회
+     */
+    @Transactional(readOnly = true)
+    public List<OrderResponse> findMyShipperOrders(Long userId) {
+        // 리포지토리에서 화주 ID로 조회 (최신순 정렬은 레포지토리 메서드 명으로 처리)
+        return orderRepository.findByUser_UserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(this::convertToResponse) // 기존에 작성된 DTO 변환 메서드 활용
+                .collect(Collectors.toList());
+    }
+    
+    
     
     private OrderResponse convertToResponse(Order order) {
         // 1. Embedded 객체 추출
@@ -257,6 +267,10 @@ public class OrderService {
         if (snapshot == null) {
             throw new IllegalStateException("주문 상세 정보(Snapshot)가 존재하지 않습니다.");
         }
+     // tag 리스트를 안전하게 복사하여 주입
+        List<String> tags = snapshot.getTag() != null ? 
+                            new ArrayList<>(snapshot.getTag()) : new ArrayList<>();
+        
 
         return OrderResponse.builder()
                 // 1. 주문 기본 정보 및 시스템 지표
@@ -264,7 +278,7 @@ public class OrderService {
                 .status(order.getStatus())
                 .distance(order.getDistance())
                 .duration(order.getDuration())
-                .createdAt(LocalDateTime.now())
+                .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
 
                 // 2. 상차지 정보 (Snapshot에서 추출)
@@ -298,6 +312,8 @@ public class OrderService {
                 .insuranceFee(snapshot.getInsuranceFee())
                 .payMethod(snapshot.getPayMethod())
                 .instant(snapshot.isInstant())
+                .memo(snapshot.getMemo())
+                .tag(tags)
 
                 // 6. 연관 객체 요약 정보
                 .cancellation(OrderResponse.CancellationSummary.from(order.getCancellationInfo()))

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 @Builder
@@ -47,6 +48,10 @@ public class OrderRequest {
 
     private boolean instant; // 즉시배차 , 배정배차
 
+    private String memo;
+    private List<String> tag;
+    
+    
     
     // --- [시스템 계산 지표: 지도 API 연동 결과] ---
     private Long distance;         // 예상 주행 거리 (단위: 미터 또는 킬로미터)

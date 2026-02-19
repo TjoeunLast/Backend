@@ -2,16 +2,18 @@ package com.example.project.domain.order.controller;
 
 import java.util.List;
 
+import com.example.project.domain.order.service.orderService.OrderQueryService;
+import org.springframework.data.domain.Page;
+import com.example.project.domain.order.dto.orderRequest.OrderSearchRequest;
+import com.example.project.domain.order.dto.orderResponse.AssignedDriverInfoResponse;
+import com.example.project.domain.order.dto.orderRequest.FareRequest;
+import com.example.project.domain.order.dto.orderResponse.OrderListResponse;
+import com.example.project.domain.order.service.orderService.FareService;
+import com.example.project.domain.order.service.orderService.OrderDriverQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.ModelAttribute;
 
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse; // DTO 임포트
@@ -32,6 +34,7 @@ public class OrderController {
     private final OrderService orderService;
     private final FareService fareService;
     private final OrderDriverQueryService orderDriverQueryService;
+    private final OrderQueryService orderQueryService;
 
 
     // 화주: 신규 오더 요청 (반환 타입을 OrderResponse로 변경)
@@ -122,7 +125,7 @@ public class OrderController {
     
     /**
      * 1. 특정 오더에 신청한 차주 리스트 조회 API
-     * GET /api/v1/shipper/orders/{orderId}/applicants
+     * GET /api/v1/orders/{orderId}/applicants
      */
     @GetMapping("/{orderId}/applicants")
     public ResponseEntity<List<AssignedDriverInfoResponse>> getApplicants(
@@ -133,7 +136,7 @@ public class OrderController {
 
     /**
      * 2. 화주가 차주를 최종 선택(배차 확정)하는 API
-     * POST /api/v1/shipper/orders/{orderId}/select-driver
+     * POST /api/v1/orders/{orderId}/select-driver
      */
     @PostMapping("/{orderId}/select-driver")
     public ResponseEntity<String> selectDriver(
@@ -144,5 +147,33 @@ public class OrderController {
         orderService.selectDriver(orderId, driverNo, user.getUserId());
         return ResponseEntity.ok("배차가 성공적으로 확정되었습니다.");
     }
+
+    // 예: /api/orders?tab=RECOMMEND
+    //                &puProvince=서울
+    //                &minReqTonnage=5
+    //                &reqCarType=윙바디
+    //                &sort=RECOMMEND&page=0
+    //                &size=20
+    @GetMapping
+    public Page<OrderListResponse> list(@ModelAttribute OrderSearchRequest request) {
+        return orderQueryService.search(request);
+    }
+    
+    
+    /**
+     * 화주 전용: 내가 등록한 모든 오더 목록 조회
+     * (최신 등록순)
+     */
+    @GetMapping("/my-shipper")
+    public ResponseEntity<List<OrderResponse>> getMyShipperOrders(@AuthenticationPrincipal Users user) {
+        // 화주 권한 체크 (선택 사항이나 권장)
+        if (!user.getRole().name().equals("SHIPPER")) {
+            throw new IllegalStateException("화주 권한이 필요한 서비스입니다.");
+        }
+        
+        List<OrderResponse> orders = orderService.findMyShipperOrders(user.getUserId());
+        return ResponseEntity.ok(orders);
+    }
+    
 
 }
