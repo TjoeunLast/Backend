@@ -18,6 +18,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.authentication.logout.LogoutHandler;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -70,6 +75,7 @@ public class SecurityConfiguration {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                //.cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable) // REST API이므로 CSRF 비활성화
                 .authorizeHttpRequests(req ->
                         req.requestMatchers(WHITE_LIST_URL).permitAll() // 화이트리스트 허용
@@ -99,6 +105,42 @@ public class SecurityConfiguration {
                 )
         ;
 
+
+
         return http.build();
     }
+
+//    @Bean
+//    public CorsConfigurationSource corsConfigurationSource() {
+//
+//        CorsConfiguration config = new CorsConfiguration();
+//
+//        // ⭐ 리액트 주소
+//        config.setAllowedOrigins(List.of("http://localhost:3000"));
+//
+//        // 허용 메서드
+//        config.setAllowedMethods(List.of(
+//                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
+//        ));
+//
+//        // ⭐ Authorization 반드시 포함
+//        config.setAllowedHeaders(List.of(
+//                "Authorization",
+//                "Content-Type",
+//                "Cache-Control"
+//        ));
+//
+//        // 쿠키 쓸 경우 true
+//        config.setAllowCredentials(true);
+//
+//        // 모든 응답 헤더 노출
+//        config.setExposedHeaders(List.of("Authorization"));
+//
+//        UrlBasedCorsConfigurationSource source =
+//                new UrlBasedCorsConfigurationSource();
+//
+//        source.registerCorsConfiguration("/**", config);
+//
+//        return source;
+//    }
 }
