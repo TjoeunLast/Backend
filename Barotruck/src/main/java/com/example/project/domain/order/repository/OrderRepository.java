@@ -145,4 +145,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
             @Param("totalPrice") Long totalPrice,
             @Param("distance") Long distance
     );
+
+    List<Order> findByUser_UserIdOrderByCreatedAtDesc(Long userId);
+
+
 }

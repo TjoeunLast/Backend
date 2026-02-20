@@ -154,6 +154,23 @@ public class OrderController {
     public Page<OrderListResponse> list(@ModelAttribute OrderSearchRequest request) {
         return orderQueryService.search(request);
     }
+    
+    
+    /**
+     * 화주 전용: 내가 등록한 모든 오더 목록 조회
+     * (최신 등록순)
+     */
+    @GetMapping("/my-shipper")
+    public ResponseEntity<List<OrderResponse>> getMyShipperOrders(@AuthenticationPrincipal Users user) {
+        // 화주 권한 체크 (선택 사항이나 권장)
+        if (!user.getRole().name().equals("SHIPPER")) {
+            throw new IllegalStateException("화주 권한이 필요한 서비스입니다.");
+        }
+        
+        List<OrderResponse> orders = orderService.findMyShipperOrders(user.getUserId());
+        return ResponseEntity.ok(orders);
+    }
+    
 
     @PatchMapping("/{orderId}/fare")
     public long estimateAndSaveFare(
