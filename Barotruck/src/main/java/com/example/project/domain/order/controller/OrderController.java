@@ -17,11 +17,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse; // DTO 임포트
-import com.example.project.domain.order.dto.orderRequest.FareRequest;
-import com.example.project.domain.order.dto.orderResponse.AssignedDriverInfoResponse;
 import com.example.project.domain.order.service.OrderService;
-import com.example.project.domain.order.service.orderService.FareService;
-import com.example.project.domain.order.service.orderService.OrderDriverQueryService;
 import com.example.project.member.domain.Users;
 
 import lombok.RequiredArgsConstructor;
@@ -175,5 +171,13 @@ public class OrderController {
         return ResponseEntity.ok(orders);
     }
     
+
+    @PatchMapping("/{orderId}/fare")
+    public long estimateAndSaveFare(
+            @PathVariable Long orderId,
+            @RequestBody FareRequest req
+    ) {
+        return fareService.estimateAndSaveFare(orderId, req);
+    }
 
 }
