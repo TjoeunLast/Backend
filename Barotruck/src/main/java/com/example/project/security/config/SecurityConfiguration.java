@@ -30,7 +30,7 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfiguration {
 
-	// 인증 없이 접근 가능한 URL 목록
+    // 인증 없이 접근 가능한 URL 목록
     private static final String[] WHITE_LIST_URL = {
             "/api/v1/auth/**",
             "/api/auth/**",
@@ -43,10 +43,10 @@ public class SecurityConfiguration {
             "/swagger-ui/**",
             "/webjars/**",
             "/swagger-ui.html",
-            "/index.html", 
-            "/login.html", 
+            "/index.html",
+            "/login.html",
             "/register.html",
-            "/css/**", 
+            "/css/**",
             "/js/**",
             "/api/recipes/**",
             "/api/receipt/**",
@@ -55,18 +55,18 @@ public class SecurityConfiguration {
             "/api/proof/**",
             "/api/v1/orders", // 오더
             "/api/notifications/**",  // 알림
-            "/api/reports/**", // 신고 
+            "/api/reports/**", // 신고
             "/api/reviews/**", // 리뷰
             "/ws-stomp/**",      // 1. 웹소켓 엔드포인트 추가
             "/pub/**",           // 2. 메시지 발행 경로 추가 (컨트롤러 입구)
-            "/sub/**" ,			
+            "/sub/**" ,
             "/api/chat/room/**",
             "/api/v1/auth/sms",
             "/swagger-ui/index.html",
             "/api/auth/sms",	// sms
             "/api/v1/admin/user/**",
-            
-            
+
+
     };
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final AuthenticationProvider authenticationProvider;
@@ -86,13 +86,13 @@ public class SecurityConfiguration {
                                 .requestMatchers("/api/ocr/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/notices/**").permitAll() // 공지는 누구나 조회 가능
                                 .requestMatchers("/api/admin/**").hasRole("ADMIN") // 관리자 전용 API
-                                
+
                                 // ★ 중요: 채팅과 공구 관련 API는 반드시 인증(Token) 필요
                                 // 이렇게 설정해야 @AuthenticationPrincipal에 데이터가 정상적으로 들어옵니다.
                                 .requestMatchers("/api/chat/**").authenticated()
                                 .requestMatchers("/api/user/**").authenticated() // 유저 정보 관련 추가
                                 .requestMatchers("/api/**").permitAll()
-                                
+
                                 .anyRequest().authenticated() // 그 외 모든 요청은 인증 필요
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(STATELESS)) // 세션 미사용

@@ -34,6 +34,7 @@ public class AuthenticationController {
             AuthenticationResponse.builder().error(ex.getMessage()).build()
         );
     } catch (Exception e) {
+        e.printStackTrace(); // 서버 콘솔에 진짜 에러 원인을 찍어줍니다.
         return ResponseEntity.badRequest().body(
             AuthenticationResponse.builder().error("이미 가입된 이메일 주소입니다. 로그인을 시도해주세요.").build()
         );
