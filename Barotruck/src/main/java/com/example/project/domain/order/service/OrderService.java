@@ -126,7 +126,7 @@ public class OrderService {
     /**
      * 오더 취소 공통 로직
      */
-    public void cancelOrder(Long orderId, String cancelReason, Users currentUser) {
+    /* public void cancelOrder(Long orderId, String cancelReason, Users currentUser) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
 
@@ -138,7 +138,7 @@ public class OrderService {
         // 2. 오더 상태 업데이트
         String newStatus = "CANCELLED_BY_" + role;
         order.cancelOrder(newStatus); //
-
+        
         // 3. 취소 정보 생성 및 연관관계 설정
         CancellationInfo cancelInfo = CancellationInfo.builder()
                 .order(order)
@@ -148,6 +148,39 @@ public class OrderService {
                 .build();
         
         order.setCancellationInfo(cancelInfo); //
+        orderRepository.save(order);
+    } */
+    
+    // 유림 수정
+    public void cancelOrder(Long orderId, String cancelReason, Users currentUser) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+
+        String role = determineCancelRole(order, currentUser);
+        
+        // 1. 상태별 취소 가능 여부 체크
+        validateCancelCondition(order, role);
+
+        // 2. [수정 및 추가 로직]
+        if ("DRIVER".equals(role)) {
+            // 차주가 취소한 경우: 다른 기사가 잡을 수 있게 초기화
+            // 기존에 만들어둔 assignDriver 편의 메서드를 활용해 status를 REQUESTED로, driverNo를 null로 변경
+            order.assignDriver(null, "REQUESTED"); 
+        } else {
+            // 화주나 관리자가 취소한 경우: 아예 종료 상태로 변경
+            String newStatus = "CANCELLED_BY_" + role;
+            order.cancelOrder(newStatus);
+        }
+
+        // 3. 취소 정보 생성 (기존 로직 유지 - 누가 왜 취소했는지 기록은 남겨야 함)
+        CancellationInfo cancelInfo = CancellationInfo.builder()
+                .order(order)
+                .cancelReason(cancelReason)
+                .cancelledAt(LocalDateTime.now())
+                .cancelledBy(role)
+                .build();
+        
+        order.setCancellationInfo(cancelInfo);
         orderRepository.save(order);
     }
 
@@ -190,10 +223,13 @@ public class OrderService {
     public List<OrderResponse> findMyDrivingOrders(Long driverId) {
         // 운행 중으로 간주되는 상태 리스트 정의
     	List<String> drivingStatuses = List.of(
+    			"REQUESTED",    // 배차대기
+    			"APPLIED",     // 승인 대기
                 "ACCEPTED",   // 배차확정
                 "LOADING",    // 상차중
                 "IN_TRANSIT",  // 이동중
-                "UNLOADING"   // 하차중
+                "UNLOADING",  // 하차중
+                "COMPLETED"    // 하차완료
             );
 
     	// 리포지토리를 통해 해당 차주 ID와 상태 목록에 해당하는 오더 조회

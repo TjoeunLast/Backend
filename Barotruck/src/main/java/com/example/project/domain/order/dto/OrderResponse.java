@@ -23,6 +23,9 @@ public class OrderResponse {
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updated;
+    
+    // 정산 상태 필드
+    private String settlementStatus;
 
     // 상차지
     private String startAddr;
@@ -74,6 +77,10 @@ public class OrderResponse {
         return OrderResponse.builder()
                 .orderId(order.getOrderId())
                 .status(order.getStatus())
+                
+                // 매필 로직 추가 정산
+                .settlementStatus(order.getSettlement() != null ? order.getSettlement().getStatus() : "READY")
+                
                 .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
                 .distance(order.getDistance())
