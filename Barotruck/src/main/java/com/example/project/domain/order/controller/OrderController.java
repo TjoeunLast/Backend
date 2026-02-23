@@ -2,22 +2,30 @@ package com.example.project.domain.order.controller;
 
 import java.util.List;
 
-import com.example.project.domain.order.service.orderService.OrderQueryService;
 import org.springframework.data.domain.Page;
-import com.example.project.domain.order.dto.orderRequest.OrderSearchRequest;
-import com.example.project.domain.order.dto.orderResponse.AssignedDriverInfoResponse;
-import com.example.project.domain.order.dto.orderRequest.FareRequest;
-import com.example.project.domain.order.dto.orderResponse.OrderListResponse;
-import com.example.project.domain.order.service.orderService.FareService;
-import com.example.project.domain.order.service.orderService.OrderDriverQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
+import com.example.project.domain.order.dto.MyRevenueResponse;
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse; // DTO 임포트
+import com.example.project.domain.order.dto.orderRequest.FareRequest;
+import com.example.project.domain.order.dto.orderRequest.OrderSearchRequest;
+import com.example.project.domain.order.dto.orderResponse.AssignedDriverInfoResponse;
+import com.example.project.domain.order.dto.orderResponse.OrderListResponse;
 import com.example.project.domain.order.service.OrderService;
+import com.example.project.domain.order.service.orderService.FareService;
+import com.example.project.domain.order.service.orderService.OrderDriverQueryService;
+import com.example.project.domain.order.service.orderService.OrderQueryService;
 import com.example.project.member.domain.Users;
 
 import lombok.RequiredArgsConstructor;
@@ -178,6 +186,18 @@ public class OrderController {
             @RequestBody FareRequest req
     ) {
         return fareService.estimateAndSaveFare(orderId, req);
+    }
+
+    
+    @GetMapping("/my-revenue")
+    public ResponseEntity<MyRevenueResponse> getMyRevenue(
+            @AuthenticationPrincipal Users user,
+            @RequestParam(value = "year", required = false) Integer year,
+            @RequestParam(value = "month", required = false) Integer month) {
+        
+        // 연/월 정보가 없으면 현재 달로 처리하도록 서비스 호출
+        MyRevenueResponse response = orderService.getMyMonthlyRevenue(user.getUserId(), year, month);
+        return ResponseEntity.ok(response);
     }
 
 }
