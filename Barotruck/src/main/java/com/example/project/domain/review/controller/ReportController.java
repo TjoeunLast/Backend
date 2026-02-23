@@ -75,7 +75,7 @@ public class ReportController {
         return ResponseEntity.ok(true);
     }
     
- // 2. 신고 상태 업데이트 (사용자)
+    // 2. 신고 상태 업데이트 (사용자)
     @PatchMapping("/my/{reportId}/status")
     public ResponseEntity<Boolean> updateMyReportStatus(
             @PathVariable("reportId") Long reportId,

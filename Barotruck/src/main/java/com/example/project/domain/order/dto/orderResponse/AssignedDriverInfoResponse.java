@@ -14,6 +14,8 @@ public class AssignedDriverInfoResponse {
     private Long userId;
     private String nickname;
     private String phone;
+    
+    
 
     // 드라이버 정보 (차량 정보)
     private Long driverId;

@@ -21,6 +21,10 @@ public class OrderRequest {
     private Long startNbhId;       // 상차지 지역 코드 ID (행정구역 단위 관리를 위한 FK)
     private String puProvince;     // 상차지 광역 자치단체명 (예: 서울, 경기, 부산) - 지역별 오더 필터링용
 
+ // 상차지 좌표
+    private BigDecimal startLat;
+    private BigDecimal startLng;
+    
     // --- [하차지 정보: 물건을 내리는 곳] ---
     private String endAddr;        // 하차지 전체 주소 (예: 경기도 용인시 처인구 ...)
     private String endPlace;       // 하차지 특정 명칭 (예: XX빌딩 후문 하역장)
