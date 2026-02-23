@@ -1,8 +1,8 @@
 package com.example.project.domain.payment.dto.paymentResponse;
 
 import com.example.project.domain.payment.domain.PaymentDispute;
-import com.example.project.domain.payment.domain.PaymentDisputeReason;
-import com.example.project.domain.payment.domain.PaymentDisputeStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeReason;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeStatus;
 import lombok.Builder;
 
 import java.time.LocalDateTime;
@@ -39,3 +39,4 @@ public record PaymentDisputeResponse(
                 .build();
     }
 }
+

@@ -1,4 +1,4 @@
-package com.example.project.domain.payment.domain;
+package com.example.project.domain.payment.domain.paymentEnum;
 
 public enum FeeInvoiceStatus {
     // 인보이스 발행 완료(미납)

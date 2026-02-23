@@ -1,5 +1,7 @@
 package com.example.project.domain.payment.domain;
 
+import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -130,10 +132,12 @@ public class TransportPayment {
         this.status = TransportPaymentStatus.DISPUTED;
     }
 
+    // 관리자 처리 등 외부 상태 반영
     public void updateStatus(TransportPaymentStatus status) {
         this.status = status;
     }
 
+    // PG 거래 식별자 반영
     public void setPgTid(String pgTid) {
         this.pgTid = pgTid;
     }

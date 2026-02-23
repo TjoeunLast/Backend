@@ -1,13 +1,15 @@
 package com.example.project.domain.payment.controller;
 
-import com.example.project.domain.payment.dto.paymentRequest.ExternalPayRequest;
-import com.example.project.domain.payment.dto.paymentRequest.MarkPaidRequest;
+import com.example.project.domain.payment.dto.paymentRequest.*;
+import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeResponse;
+import com.example.project.domain.payment.dto.paymentResponse.TossPrepareResponse;
 import com.example.project.domain.payment.dto.paymentResponse.TransportPaymentResponse;
-import com.example.project.domain.payment.service.FeeInvoiceService;
-import com.example.project.domain.payment.service.TransportPaymentService;
+import com.example.project.domain.payment.service.core.FeeInvoiceService;
+import com.example.project.domain.payment.service.core.TransportPaymentService;
 import com.example.project.global.api.ApiResponse;
 import com.example.project.member.domain.Users;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +24,7 @@ public class PaymentController {
     private final FeeInvoiceService feeInvoiceService;
 
     @PostMapping("/orders/{orderId}/mark-paid")
+    @PreAuthorize("hasRole('SHIPPER')")
     public ApiResponse<TransportPaymentResponse> markPaid(
             @PathVariable Long orderId,
             @RequestBody MarkPaidRequest request,
@@ -38,30 +41,57 @@ public class PaymentController {
     }
 
     @PostMapping("/orders/{orderId}/confirm")
+    @PreAuthorize("hasRole('DRIVER')")
     public ApiResponse<TransportPaymentResponse> confirm(
-            @PathVariable Long orderId,
+            @PathVariable("orderId") Long orderId,
             @AuthenticationPrincipal Users currentUser) {
         var p = transportPaymentService.confirm(currentUser, orderId);
         return ApiResponse.ok(TransportPaymentResponse.from(p));
     }
 
     @PostMapping("/orders/{orderId}/dispute")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<TransportPaymentResponse> dispute(
-            @PathVariable Long orderId,
+            @PathVariable("orderId") Long orderId,
             @AuthenticationPrincipal Users currentUser) {
         var p = transportPaymentService.dispute(currentUser, orderId);
         return ApiResponse.ok(TransportPaymentResponse.from(p));
     }
 
-
-
-    @PostMapping("/fee-invoices/generate")
-    public ApiResponse<?> generateFeeInvoice(@RequestParam Long shipperUserId, @RequestParam String period) {
-        var invoice = feeInvoiceService.generateForShipper(shipperUserId, YearMonth.parse(period));
-        return ApiResponse.ok(invoice);
+    @PostMapping("/orders/{orderId}/toss/prepare")
+    @PreAuthorize("hasRole('SHIPPER')")
+    public ApiResponse<TossPrepareResponse> prepareTossPayment(
+            @PathVariable("orderId") Long orderId,
+            @RequestBody TossPrepareRequest request,
+            @AuthenticationPrincipal Users currentUser
+    ) {
+        return ApiResponse.ok(transportPaymentService.prepareTossPayment(currentUser, orderId, request));
     }
 
+    @PostMapping("/orders/{orderId}/toss/confirm")
+    @PreAuthorize("hasRole('SHIPPER')")
+    public ApiResponse<TransportPaymentResponse> confirmTossPayment(
+            @PathVariable("orderId") Long orderId,
+            @RequestBody TossConfirmRequest request,
+            @AuthenticationPrincipal Users currentUser
+    ) {
+        var payment = transportPaymentService.confirmTossPayment(currentUser, orderId, request);
+        return ApiResponse.ok(TransportPaymentResponse.from(payment));
+    }
+
+    @PostMapping("/webhooks/toss")
+    public ApiResponse<?> receiveTossWebhook(
+            @RequestHeader(value = "Toss-Event-Id", required = false) String eventId,
+            @RequestBody String payload
+    ) {
+        transportPaymentService.handleTossWebhook(eventId, payload);
+        return ApiResponse.ok(true);
+    }
+
+
+
     @GetMapping("/fee-invoices/me")
+    @PreAuthorize("hasRole('SHIPPER')")
     public ApiResponse<?> myFeeInvoice(
             @RequestParam("period") String period,
             @AuthenticationPrincipal Users currentUser
@@ -71,6 +101,7 @@ public class PaymentController {
     }
 
     @PostMapping("/fee-invoices/{invoiceId}/mark-paid")
+    @PreAuthorize("hasRole('SHIPPER')")
     public ApiResponse<?> markFeeInvoicePaid(
             @PathVariable("invoiceId") Long invoiceId,
             @AuthenticationPrincipal Users currentUser
@@ -80,6 +111,7 @@ public class PaymentController {
     }
 
     @PostMapping("/orders/{orderId}/external-pay")
+    @PreAuthorize("hasRole('SHIPPER')")
     public ApiResponse<TransportPaymentResponse> externalPay(
             @PathVariable("orderId") Long orderId,
             @RequestBody ExternalPayRequest request,
@@ -89,3 +121,4 @@ public class PaymentController {
         return ApiResponse.ok(TransportPaymentResponse.from(p));
     }
 }
+

@@ -1,7 +1,8 @@
 package com.example.project.domain.payment.dto.paymentResponse;
 
-import com.example.project.domain.payment.domain.*;
 import com.example.project.domain.payment.domain.TransportPayment;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
 import lombok.Builder;
 
 import java.math.BigDecimal;
