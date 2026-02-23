@@ -20,23 +20,29 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FeeInvoiceItem {
 
+    // 인보이스 항목 PK
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "ITEM_ID")
     private Long itemId;
 
+    // 상위 인보이스 ID
     @Column(name = "INVOICE_ID", nullable = false)
     private Long invoiceId;
 
+    // 수수료가 발생한 주문 ID
     @Column(name = "ORDER_ID", nullable = false)
     private Long orderId;
 
+    // 주문별 수수료 금액
     @Column(name = "FEE_AMOUNT", nullable = false, precision = 18, scale = 2)
     private BigDecimal feeAmount;
 
+    // 항목 생성 시각
     @Column(name = "CREATED_AT", nullable = false)
     private LocalDateTime createdAt;
 
+    // 주문 단위 인보이스 항목 생성
     public static FeeInvoiceItem of(Long invoiceId, Long orderId, BigDecimal feeAmount) {
         return FeeInvoiceItem.builder()
                 .invoiceId(invoiceId)

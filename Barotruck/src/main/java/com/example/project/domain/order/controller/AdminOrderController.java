@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.project.domain.order.domain.Order.ProvinceStatResponse;
 import com.example.project.domain.order.domain.Order.RouteStatisticsResponse;
 import com.example.project.domain.order.dto.OrderResponse;
-import com.example.project.domain.order.dto.orderResponse.AdminOrderDetailResponse;
 import com.example.project.domain.order.service.AdminOrderService;
 import com.example.project.member.domain.Users;
 
@@ -36,9 +35,10 @@ public class AdminOrderController {
     }
 
     @GetMapping("/{orderId}")
-    public ResponseEntity<AdminOrderDetailResponse> getOrderDetail(
-            @PathVariable("orderId") Long orderId) {
-        return ResponseEntity.ok(orderService.getOrderDetailForAdmin(orderId));
+    public ResponseEntity<OrderResponse> getOrderDetail(
+            @PathVariable("orderId") Long orderId,
+            @AuthenticationPrincipal Users admin) {
+        return ResponseEntity.ok(orderService.getOrderDetailForAdmin(orderId, admin));
     }
 
     // 강제 배차

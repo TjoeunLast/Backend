@@ -17,9 +17,13 @@ import com.example.project.domain.order.domain.Order.ProvinceAnalysisResponse;
 import com.example.project.domain.order.domain.Order.ProvinceStatResponse;
 import com.example.project.domain.order.domain.Order.RouteStatResponse;
 import com.example.project.domain.order.domain.Order.RouteStatisticsResponse;
-import com.example.project.domain.order.dto.orderResponse.AdminOrderDetailResponse;
 import com.example.project.domain.order.dto.OrderResponse;
 import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.domain.payment.repository.PaymentDisputeRepository;
+import com.example.project.domain.payment.repository.TransportPaymentRepository;
+import com.example.project.domain.proof.repository.ProofRepository;
+import com.example.project.member.domain.Users;
+import com.example.project.security.user.Role;
 
 import lombok.RequiredArgsConstructor;
 
@@ -29,6 +33,9 @@ import lombok.RequiredArgsConstructor;
 public class AdminOrderService {
 
     private final OrderRepository orderRepository;
+    private final TransportPaymentRepository transportPaymentRepository;
+    private final PaymentDisputeRepository paymentDisputeRepository;
+    private final ProofRepository proofRepository;
 
     public void forceAllocateOrder(Long orderId, Long driverId, String adminEmail, String reason) {
         Order order = orderRepository.findById(orderId)
@@ -82,10 +89,61 @@ public class AdminOrderService {
     }
 
     @Transactional(readOnly = true)
-    public AdminOrderDetailResponse getOrderDetailForAdmin(Long orderId) {
+    public OrderResponse getOrderDetailForAdmin(Long orderId, Users currentUser) {
+        if (currentUser == null || currentUser.getUserId() == null || currentUser.getRole() != Role.ADMIN) {
+            throw new IllegalStateException("admin only");
+        }
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("order not found. orderId=" + orderId));
-        return AdminOrderDetailResponse.from(order);
+
+        OrderResponse response = OrderResponse.from(order);
+        enrichDetailSummaries(orderId, response);
+        return response;
+    }
+
+    private void enrichDetailSummaries(Long orderId, OrderResponse response) {
+        if (response == null) {
+            return;
+        }
+
+        transportPaymentRepository.findByOrderId(orderId).ifPresent(payment ->
+                response.setPaymentSummary(OrderResponse.PaymentSummary.builder()
+                        .paymentId(payment.getPaymentId())
+                        .chargedAmount(payment.getAmount())
+                        .receivedAmount(payment.getNetAmountSnapshot())
+                        .feeAmount(payment.getFeeAmountSnapshot())
+                        .method(payment.getMethod())
+                        .status(payment.getStatus())
+                        .paidAt(payment.getPaidAt())
+                        .confirmedAt(payment.getConfirmedAt())
+                        .build())
+        );
+
+        proofRepository.findByOrder_OrderId(orderId).ifPresent(proof ->
+                response.setProofSummary(OrderResponse.ProofSummary.builder()
+                        .proofId(proof.getProofId())
+                        .receiptImageUrl(proof.getReceiptImage() != null ? proof.getReceiptImage().getImageUrl() : "")
+                        .signatureImageUrl(proof.getSignatureImage() != null ? proof.getSignatureImage().getImageUrl() : "")
+                        .recipientName(proof.getRecipientName())
+                        .createdAt(proof.getCreatedAt())
+                        .build())
+        );
+
+        paymentDisputeRepository.findByOrderId(orderId).ifPresent(dispute ->
+                response.setDisputeSummary(OrderResponse.DisputeSummary.builder()
+                        .disputeId(dispute.getDisputeId())
+                        .requesterUserId(dispute.getRequesterUserId())
+                        .createdByUserId(dispute.getCreatedByUserId())
+                        .reasonCode(dispute.getReasonCode())
+                        .description(dispute.getDescription())
+                        .attachmentUrl(dispute.getAttachmentUrl())
+                        .status(dispute.getStatus())
+                        .adminMemo(dispute.getAdminMemo())
+                        .requestedAt(dispute.getRequestedAt())
+                        .processedAt(dispute.getProcessedAt())
+                        .build())
+        );
     }
     
     

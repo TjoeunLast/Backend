@@ -6,6 +6,10 @@ import java.util.List;
 
 import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.domain.embedded.OrderSnapshot;
+import com.example.project.domain.payment.domain.PaymentDisputeReason;
+import com.example.project.domain.payment.domain.PaymentDisputeStatus;
+import com.example.project.domain.payment.domain.PaymentMethod;
+import com.example.project.domain.payment.domain.TransportPaymentStatus;
 import com.example.project.global.image.ImageInfo;
 import com.example.project.security.user.Role;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -77,6 +81,9 @@ public class OrderResponse {
 
     private UserSummary user;
     private CancellationSummary cancellation;
+    private PaymentSummary paymentSummary;
+    private ProofSummary proofSummary;
+    private DisputeSummary disputeSummary;
 
     public static OrderResponse from(Order order) {
         OrderSnapshot s = order.getSnapshot();
@@ -176,6 +183,50 @@ public class OrderResponse {
                     .cancelledBy(info.getCancelledBy())
                     .build();
         }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PaymentSummary {
+        private Long paymentId;
+        private BigDecimal chargedAmount;
+        private BigDecimal receivedAmount;
+        private BigDecimal feeAmount;
+        private PaymentMethod method;
+        private TransportPaymentStatus status;
+        private LocalDateTime paidAt;
+        private LocalDateTime confirmedAt;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ProofSummary {
+        private Long proofId;
+        private String receiptImageUrl;
+        private String signatureImageUrl;
+        private String recipientName;
+        private LocalDateTime createdAt;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DisputeSummary {
+        private Long disputeId;
+        private Long requesterUserId;
+        private Long createdByUserId;
+        private PaymentDisputeReason reasonCode;
+        private String description;
+        private String attachmentUrl;
+        private PaymentDisputeStatus status;
+        private String adminMemo;
+        private LocalDateTime requestedAt;
+        private LocalDateTime processedAt;
     }
     
 
