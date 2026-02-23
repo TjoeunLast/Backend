@@ -1,5 +1,6 @@
 package com.example.project.domain.payment.domain;
 
+import com.example.project.domain.payment.domain.paymentEnum.FeeInvoiceStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -12,7 +13,7 @@ import java.time.LocalDateTime;
         uniqueConstraints = {
                 @UniqueConstraint(name = "UK_FEE_INVOICES_SHIPPER_PERIOD", columnNames = {"SHIPPER_USER_ID","PERIOD"})
         }
-        )
+)
 @Getter
 @Builder
 @AllArgsConstructor
@@ -75,5 +76,13 @@ public class FeeInvoice {
     public void markPaid() {
         this.status = FeeInvoiceStatus.PAID;
         this.paidAt = LocalDateTime.now();
+    }
+
+    // 미납/연체 처리
+    public void markOverdue() {
+        if (this.status == FeeInvoiceStatus.PAID) {
+            return;
+        }
+        this.status = FeeInvoiceStatus.OVERDUE;
     }
 }

@@ -6,10 +6,10 @@ import java.util.List;
 
 import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.domain.embedded.OrderSnapshot;
-import com.example.project.domain.payment.domain.PaymentDisputeReason;
-import com.example.project.domain.payment.domain.PaymentDisputeStatus;
-import com.example.project.domain.payment.domain.PaymentMethod;
-import com.example.project.domain.payment.domain.TransportPaymentStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeReason;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
 import com.example.project.global.image.ImageInfo;
 import com.example.project.security.user.Role;
 import com.fasterxml.jackson.annotation.JsonFormat;

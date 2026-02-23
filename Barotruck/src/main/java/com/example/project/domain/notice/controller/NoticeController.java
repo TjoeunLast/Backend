@@ -41,7 +41,7 @@ public class NoticeController {
 
     // 공지사항 작성 (관리자만)
     @PostMapping
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Long> create(
     		@RequestBody NoticeRequest request, 
     		@AuthenticationPrincipal Users admin) {
@@ -50,7 +50,7 @@ public class NoticeController {
 
     // 공지사항 수정 (관리자만)
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> update(
     		@PathVariable Long id, 
     		@RequestBody NoticeRequest request
@@ -61,7 +61,7 @@ public class NoticeController {
 
     // 공지사항 삭제 (관리자만)
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(
     		@PathVariable Long id) {
         noticeService.deleteNotice(id);

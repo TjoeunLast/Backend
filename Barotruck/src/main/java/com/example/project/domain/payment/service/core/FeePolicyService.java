@@ -1,4 +1,4 @@
-package com.example.project.domain.payment.service;
+package com.example.project.domain.payment.service.core;
 
 import org.springframework.stereotype.Service;
 
@@ -20,7 +20,7 @@ public class FeePolicyService {
 
         boolean promoApplied = false;
         if (firstPaymentPromoEligible) {
-            rate = new BigDecimal("0.03"); // 첫 결제는 3%처럼 보이게
+            rate = new BigDecimal("0.03"); // 첫 결제 프로모션 3% 수수료 적용
             promoApplied = true;
         }
 

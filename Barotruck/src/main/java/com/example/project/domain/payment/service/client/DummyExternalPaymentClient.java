@@ -1,6 +1,6 @@
-package com.example.project.domain.payment.service;
+package com.example.project.domain.payment.service.client;
 
-import com.example.project.domain.payment.domain.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -10,7 +10,7 @@ public class DummyExternalPaymentClient implements ExternalPaymentClient {
 
     @Override
     public ExternalPayResult pay(String merchantOrderId, long amount, PaymentMethod method) {
-        // TODO: 나중에 WebClient/RestTemplate로 실제 결제사 API 호출로 교체
+        // TODO: 실제 PG 연동(WebClient/RestTemplate)으로 교체
         return new ExternalPayResult(true, "DUMMY-" + UUID.randomUUID(), null);
     }
 }

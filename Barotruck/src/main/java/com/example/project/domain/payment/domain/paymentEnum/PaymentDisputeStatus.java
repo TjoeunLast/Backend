@@ -1,4 +1,4 @@
-package com.example.project.domain.payment.domain;
+package com.example.project.domain.payment.domain.paymentEnum;
 
 public enum PaymentDisputeStatus {
     // 이의제기 등록 직후 대기 상태
