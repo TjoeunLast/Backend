@@ -33,7 +33,7 @@ public class SettlementController {
 
     // 결제 승인 (실제 결제 프로세스 완료 후 호출)
     @PatchMapping("/{orderId}/complete")
-    public ResponseEntity<String> complete(@PathVariable Long orderId) {
+    public ResponseEntity<String> complete(@PathVariable("orderId") Long orderId) {
         settlementService.completeSettlement(orderId);
         return ResponseEntity.ok("결제가 성공적으로 완료되었습니다.");
     }

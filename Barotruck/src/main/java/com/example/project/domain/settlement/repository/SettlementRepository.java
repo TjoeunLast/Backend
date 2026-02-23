@@ -43,4 +43,9 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
            "GROUP BY o.snapshot.puProvince " +
            "ORDER BY SUM(s.totalPrice) DESC")
     List<Object[]> getSettlementStatsByRegion(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT s " +
+           "FROM Settlement s " +
+           "WHERE s.order.orderId = :orderId")
+    Optional<Settlement> findByOrderId(@Param("orderId") Long orderId);
 }

@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
 
 import com.example.project.global.exception.CustomException;
 
@@ -97,14 +98,24 @@ public class GlobalExceptionHandler {
 //    AccessDeniedException (403 Forbidden)
 //    의미: 데이터는 존재하지만, 요청한 유저가 해당 데이터를 건드릴 권한이 없을 때 발생합니다.
 //    사용 예: A라는 유저가 B라는 유저의 지출 내역을 삭제하려고 시도할 때 "권한이 없습니다"라고 차단합니다.
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<String> handleAccessDenied(AccessDeniedException e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-    }
+	    @ExceptionHandler(AccessDeniedException.class)
+	    public ResponseEntity<String> handleAccessDenied(AccessDeniedException e) {
+	        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+	    }
+
+	    @ExceptionHandler(NoHandlerFoundException.class)
+	    public ResponseEntity<ErrorResponse> handleNoHandlerFound(NoHandlerFoundException e) {
+	        ErrorResponse response = ErrorResponse.builder()
+	                .success(false)
+	                .message("요청한 엔드포인트를 찾을 수 없습니다.")
+	                .code("NOT_FOUND")
+	                .build();
+	        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+	    }
 
 
-    
-    // -------------------------------
+	    
+	    // -------------------------------
     // 에러 응답 공통 구조
     // -------------------------------
     @Data
