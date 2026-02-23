@@ -11,11 +11,8 @@ import java.time.LocalDateTime;
         name = "FEE_INVOICES",
         uniqueConstraints = {
                 @UniqueConstraint(name = "UK_FEE_INVOICES_SHIPPER_PERIOD", columnNames = {"SHIPPER_USER_ID","PERIOD"})
-        },
-        indexes = {
-                @Index(name = "IDX_FEE_INVOICES_SHIPPER_PERIOD", columnList = "SHIPPER_USER_ID,PERIOD")
         }
-)
+        )
 @Getter
 @Builder
 @AllArgsConstructor

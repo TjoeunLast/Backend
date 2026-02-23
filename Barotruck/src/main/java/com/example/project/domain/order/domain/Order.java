@@ -254,6 +254,8 @@ public class Order {
                 .startPlace(request.getStartPlace())
                 .startType(request.getStartType())
                 .startSchedule(request.getStartSchedule())
+                .startLat(request.getStartLat())
+                .startLng(request.getStartLng())
                 .puProvince(request.getPuProvince())
                 .endAddr(request.getEndAddr())
                 .endPlace(request.getEndPlace())
