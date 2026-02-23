@@ -1,6 +1,8 @@
 package com.example.project.domain.order.service;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -11,8 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.project.domain.order.domain.AdminControl;
 import com.example.project.domain.order.domain.CancellationInfo;
 import com.example.project.domain.order.domain.Order;
-import com.example.project.domain.order.domain.orderEnum.OrderDrivingStatus;
 import com.example.project.domain.order.domain.embedded.OrderSnapshot;
+import com.example.project.domain.order.domain.orderEnum.OrderDrivingStatus;
+import com.example.project.domain.order.dto.MyRevenueResponse;
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse; // 추가
 import com.example.project.domain.order.repository.OrderRepository;
@@ -294,6 +297,48 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
     
+    
+
+ // OrderService.java에 추가
+
+    public MyRevenueResponse getMyMonthlyRevenue(Long driverNo, Integer year, Integer month) {
+        // 1. 기간 설정
+        LocalDateTime now = LocalDateTime.now();
+        int targetYear = (year != null) ? year : now.getYear();
+        int targetMonth = (month != null) ? month : now.getMonthValue();
+        
+        LocalDateTime start = LocalDateTime.of(targetYear, targetMonth, 1, 0, 0, 0);
+        LocalDateTime end = start.with(TemporalAdjusters.lastDayOfMonth()).with(LocalTime.MAX);
+
+        // 2. 수익 통계 조회 (List<Object[]>로 받아 첫 행 추출)
+        List<Object[]> results = orderRepository.findRevenueStatsByDriver(driverNo, start, end);
+        System.out.println("-----------------------");
+        System.out.println(results);
+        System.out.println("-----------------------");
+        
+        long total = 0, received = 0, pending = 0;
+
+        if (results != null && !results.isEmpty()) {
+            Object[] stats = results.get(0); 
+            total = (stats[0] != null) ? ((Number) stats[0]).longValue() : 0L;
+            received = (stats[1] != null) ? ((Number) stats[1]).longValue() : 0L;
+            pending = (stats[2] != null) ? ((Number) stats[2]).longValue() : 0L;
+            System.out.println("통계 결과 -> 총액: " + total + ", 수령: " + received + ", 예정: " + pending);
+        }
+
+        // 3. 해당 월 오더 목록 조회 및 변환
+        List<OrderResponse> orderList = orderRepository.findMonthlyOrdersByDriver(driverNo, start, end)
+                .stream()
+                .map(OrderResponse::from)
+                .collect(Collectors.toList());
+
+        return MyRevenueResponse.builder()
+                .totalAmount(total)
+                .receivedAmount(received)
+                .pendingAmount(pending)
+                .orders(orderList)
+                .build();
+    }
     
     
     private OrderResponse convertToResponse(Order order) {

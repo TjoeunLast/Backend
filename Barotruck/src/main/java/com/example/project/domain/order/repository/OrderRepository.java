@@ -149,4 +149,37 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     List<Order> findByUser_UserIdOrderByCreatedAtDesc(Long userId);
 
 
+    
+    @Query("SELECT " +
+    	       "SUM(COALESCE(o.snapshot.basePrice, 0) + COALESCE(o.snapshot.laborFee, 0) + " +
+    	       "    COALESCE(o.snapshot.packagingPrice, 0) + COALESCE(o.snapshot.insuranceFee, 0)), " +
+    	       "SUM(CASE WHEN o.status = 'COMPLETED' THEN " +
+    	       "    (COALESCE(o.snapshot.basePrice, 0) + COALESCE(o.snapshot.laborFee, 0) + " +
+    	       "     COALESCE(o.snapshot.packagingPrice, 0) + COALESCE(o.snapshot.insuranceFee, 0)) ELSE 0 END), " +
+    	       "SUM(CASE WHEN o.status <> 'COMPLETED' THEN " +
+    	       "    (COALESCE(o.snapshot.basePrice, 0) + COALESCE(o.snapshot.laborFee, 0) + " +
+    	       "     COALESCE(o.snapshot.packagingPrice, 0) + COALESCE(o.snapshot.insuranceFee, 0)) ELSE 0 END) " +
+    	       "FROM Order o " +
+    	       "WHERE o.driverNo = :driverNo " +
+    	       "AND o.createdAt BETWEEN :start AND :end")
+    	List<Object[]> findRevenueStatsByDriver(
+    	    @Param("driverNo") Long driverNo, 
+    	    @Param("start") LocalDateTime start, 
+    	    @Param("end") LocalDateTime end
+    	);
+
+    /**
+     * 차주용 이번 달 오더 목록 조회
+     */
+    @Query("SELECT o FROM Order o " +
+           "WHERE o.driverNo = :driverNo " +
+           "AND o.createdAt BETWEEN :start AND :end " +
+           "ORDER BY o.createdAt DESC")
+    List<Order> findMonthlyOrdersByDriver(
+        @Param("driverNo") Long driverNo, 
+        @Param("start") LocalDateTime start, 
+        @Param("end") LocalDateTime end
+    );
+    
+    
 }
