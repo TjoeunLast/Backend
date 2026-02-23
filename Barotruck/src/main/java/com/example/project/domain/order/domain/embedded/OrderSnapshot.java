@@ -42,6 +42,10 @@ public class OrderSnapshot {
     private String startSchedule;
     private String puProvince;
 
+    // 상차지 좌표
+    private BigDecimal startLat;
+    private BigDecimal startLng;
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "START_NBH_ID", nullable=true)
     private Neighborhood startNeighborhood;
@@ -52,6 +56,8 @@ public class OrderSnapshot {
     private String endType;
     private String endSchedule;
     private String doProvince;
+    
+    
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "END_NBH_ID", nullable=true)

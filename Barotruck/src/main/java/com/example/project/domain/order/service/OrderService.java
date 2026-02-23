@@ -318,6 +318,9 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
 
+                
+                .startLat(snapshot.getStartLat())
+                .startLng(snapshot.getStartLng())
                 // 2. 상차지 정보 (Snapshot에서 추출)
                 .startAddr(snapshot.getStartAddr())
                 .startPlace(snapshot.getStartPlace())

@@ -22,6 +22,10 @@ public class AdminOrderDetailResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updated;
     private Long driverNo;
+    
+ // 상차지 좌표
+    private BigDecimal startLat;
+    private BigDecimal startLng;
 
     private Long shipperUserId;
     private String shipperNickname;
@@ -71,6 +75,8 @@ public class AdminOrderDetailResponse {
                 .shipperUserId(order.getUser() != null ? order.getUser().getUserId() : null)
                 .shipperNickname(order.getUser() != null ? order.getUser().getNickname() : null)
                 .shipperRole(order.getUser() != null ? order.getUser().getRole() : null)
+                .startLat(snapshot.getStartLat())
+                .startLng(snapshot.getStartLng())
                 .startAddr(snapshot != null ? snapshot.getStartAddr() : null)
                 .startPlace(snapshot != null ? snapshot.getStartPlace() : null)
                 .startSchedule(snapshot != null ? snapshot.getStartSchedule() : null)

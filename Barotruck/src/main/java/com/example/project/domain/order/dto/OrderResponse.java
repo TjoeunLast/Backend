@@ -35,6 +35,10 @@ public class OrderResponse {
     private String startSchedule;
     private String puProvince;
 
+ // 상차지 좌표
+    private BigDecimal startLat;
+    private BigDecimal startLng;
+    
     // 하차지
     private String endAddr;
     private String endPlace;
@@ -83,6 +87,8 @@ public class OrderResponse {
                 .distance(order.getDistance())
                 .duration(order.getDuration())
                 // Snapshot 데이터 매핑
+                .startLat(s.getStartLat())
+                .startLng(s.getStartLng())
                 .startAddr(s.getStartAddr())
                 .startPlace(s.getStartPlace())
                 .startType(s.getStartType())
