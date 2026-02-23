@@ -63,6 +63,11 @@ public class OrderService {
         	order.addToDriverList(driverNo);	
         }
 
+        if (order.getSnapshot().isInstant()) {
+            order.assignDriver(driverNo, "ACCEPTED");
+        } else {
+            order.addToDriverList(driverNo);
+        }
     }
 
     /**

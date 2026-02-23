@@ -1,6 +1,6 @@
-// src/main/java/com/example/project/domain/payment/controller/PaymentController.java
 package com.example.project.domain.payment.controller;
 
+import com.example.project.domain.payment.dto.paymentRequest.ExternalPayRequest;
 import com.example.project.domain.payment.dto.paymentRequest.MarkPaidRequest;
 import com.example.project.domain.payment.dto.paymentResponse.TransportPaymentResponse;
 import com.example.project.domain.payment.service.FeeInvoiceService;
@@ -27,7 +27,13 @@ public class PaymentController {
             @RequestBody MarkPaidRequest request,
             @AuthenticationPrincipal Users currentUser
     ) {
-        var p = transportPaymentService.markPaid(currentUser, orderId, request.getMethod(), request.getProofUrl(), request.getPaidAt());
+        var p = transportPaymentService.markPaid(
+                currentUser,
+                orderId,
+                request.getMethod(),
+                request.getProofUrl(),
+                request.getPaidAt()
+        );
         return ApiResponse.ok(TransportPaymentResponse.from(p));
     }
 
@@ -47,7 +53,8 @@ public class PaymentController {
         return ApiResponse.ok(TransportPaymentResponse.from(p));
     }
 
-    // 관리자/배치용 (MVP)
+
+
     @PostMapping("/fee-invoices/generate")
     public ApiResponse<?> generateFeeInvoice(@RequestParam Long shipperUserId, @RequestParam String period) {
         var invoice = feeInvoiceService.generateForShipper(shipperUserId, YearMonth.parse(period));
@@ -56,28 +63,29 @@ public class PaymentController {
 
     @GetMapping("/fee-invoices/me")
     public ApiResponse<?> myFeeInvoice(
-            @RequestParam String period,
-            @AuthenticationPrincipal Users currentUser) {
+            @RequestParam("period") String period,
+            @AuthenticationPrincipal Users currentUser
+    ) {
         var invoice = feeInvoiceService.getMyInvoice(currentUser, YearMonth.parse(period));
         return ApiResponse.ok(invoice);
     }
 
     @PostMapping("/fee-invoices/{invoiceId}/mark-paid")
     public ApiResponse<?> markFeeInvoicePaid(
-            @PathVariable Long invoiceId,
-            @AuthenticationPrincipal Users currentUser) {
+            @PathVariable("invoiceId") Long invoiceId,
+            @AuthenticationPrincipal Users currentUser
+    ) {
         var invoice = feeInvoiceService.markInvoicePaid(currentUser, invoiceId);
         return ApiResponse.ok(invoice);
     }
 
     @PostMapping("/orders/{orderId}/external-pay")
     public ApiResponse<TransportPaymentResponse> externalPay(
-            @PathVariable Long orderId,
-            @RequestBody com.example.project.domain.payment.dto.paymentRequest.ExternalPayRequest request,
+            @PathVariable("orderId") Long orderId,
+            @RequestBody ExternalPayRequest request,
             @AuthenticationPrincipal Users currentUser
     ) {
         var p = transportPaymentService.externalPay(currentUser, orderId, request.getMethod());
         return ApiResponse.ok(TransportPaymentResponse.from(p));
     }
-
 }
