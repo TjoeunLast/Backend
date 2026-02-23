@@ -17,6 +17,7 @@ import com.example.project.domain.order.domain.Order.ProvinceAnalysisResponse;
 import com.example.project.domain.order.domain.Order.ProvinceStatResponse;
 import com.example.project.domain.order.domain.Order.RouteStatResponse;
 import com.example.project.domain.order.domain.Order.RouteStatisticsResponse;
+import com.example.project.domain.order.dto.orderResponse.AdminOrderDetailResponse;
 import com.example.project.domain.order.dto.OrderResponse;
 import com.example.project.domain.order.repository.OrderRepository;
 
@@ -78,6 +79,13 @@ public class AdminOrderService {
         return orderRepository.findByStatusInOrderByCreatedAtDesc(cancelStatuses).stream()
                 .map(OrderResponse::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AdminOrderDetailResponse getOrderDetailForAdmin(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("order not found. orderId=" + orderId));
+        return AdminOrderDetailResponse.from(order);
     }
     
     

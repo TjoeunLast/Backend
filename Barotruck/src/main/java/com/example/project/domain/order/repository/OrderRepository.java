@@ -8,6 +8,7 @@ import java.util.Optional;
 import com.example.project.domain.order.domain.FarePolicy;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -126,9 +127,26 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     );
     
  // status가 String인 경우에도 In 키워드로 목록 조회가 가능합니다. 배차 현황중인 오더목록 볼수있는 (차주입장에서)
-    List<Order> findByDriverNoAndStatusIn(Long driverNo, List<String> statuses); 
- 
+    List<Order> findByDriverNoAndStatusIn(Long driverNo, List<String> statuses);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(
+            value = "UPDATE ORDERS " +
+                    "SET BASE_PRICE = :basePrice, " +
+                    "TOTAL_PRICE = :totalPrice, " +
+                    "DISTANCE = :distance, " +
+                    "UPDATED = SYSTIMESTAMP " +
+                    "WHERE ORDER_ID = :orderId",
+            nativeQuery = true
+    )
+    int updateFareSnapshot(
+            @Param("orderId") Long orderId,
+            @Param("basePrice") Long basePrice,
+            @Param("totalPrice") Long totalPrice,
+            @Param("distance") Long distance
+    );
+
     List<Order> findByUser_UserIdOrderByCreatedAtDesc(Long userId);
-    
-    
+
+
 }
