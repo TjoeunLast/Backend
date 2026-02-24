@@ -1,6 +1,5 @@
 package com.example.project.domain.order.domain;
 
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,37 +48,32 @@ public class Order {
     private Long orderId;
 
     // 차주 (DRIVER_NO)
-    @Column(name = "DRIVER_NO", nullable=true)
+    @Column(name = "DRIVER_NO", nullable = true)
     private Long driverNo;
 
- // 1. 배차를 희망하는 기사들의 ID 목록 (신청자 명단)
+    // 1. 배차를 희망하는 기사들의 ID 목록 (신청자 명단)
     @ElementCollection
-    @CollectionTable(
-        name = "ORDER_DRIVER_LIST", // 별도의 보조 테이블 생성
-        joinColumns = @JoinColumn(name = "ORDER_ID")
-    )
+    @CollectionTable(name = "ORDER_DRIVER_LIST", // 별도의 보조 테이블 생성
+            joinColumns = @JoinColumn(name = "ORDER_ID"))
     @Column(name = "DRIVER_ID")
     @Builder.Default
     private List<Long> driverList = new ArrayList<>();
-    
-    
+
     // 화주 (userId - FK)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "USER_ID")
     private Users user;
 
- // 본문 정보 (한 번 정해지면 거의 안 바뀜)
+    // 본문 정보 (한 번 정해지면 거의 안 바뀜)
     @Embedded
     private OrderSnapshot snapshot;
     // 1. 거리 및 소요 시간 (물리적 지표)
     @Column(name = "DISTANCE")
     private Long distance; // 거리 (Field6)
-    
+
     @Column(name = "DURATION")
     private Long duration; // 소요시간 (Field7)
 
-   
-    
     // 상태 및 시간
     @Column(name = "STATUS", length = 30)
     private String status = "REQUESTED"; // 기본값 설정 ACCEPTED, LOADING(상차지), IN_TRANSIT(이동중), UNLOADING(하차지), COMPLETED
@@ -88,28 +82,26 @@ public class Order {
     @Column(name = "UPDATED")
     private LocalDateTime updated; // 업데이트 일시 (Field8)
 
-    
     // Order.java 내부 추가
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     private List<Review> reviews = new ArrayList<>();
-    
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     private List<Report> reports = new ArrayList<>();
 
- // [변경] 관리자 제어 (별도 테이블)
+    // [변경] 관리자 제어 (별도 테이블)
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private AdminControl adminControl;
 
     // [변경] 취소 정보 (별도 테이블)
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private CancellationInfo cancellationInfo;
-    
- // [변경] 결제/정산 정보 (Settlement로 이동)
+
+    // [변경] 결제/정산 정보 (Settlement로 이동)
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Settlement settlement;
-    
-    
- // Order.java 내부에 추가
+
+    // Order.java 내부에 추가
     public void changeStatus(String newStatus) {
         validateStatusTransition(newStatus); // 필요 시 상태 전환 규칙 검증 로직 추가
         this.status = newStatus;
@@ -124,11 +116,11 @@ public class Order {
         if ("COMPLETED".equals(this.status)) {
             throw new IllegalStateException("이미 완료된 주문은 상태를 변경할 수 없습니다.");
         }
-        
+
         // 이외에 ACCEPTED -> LOADING -> IN_TRANSIT 등의 순서 검증 로직을 넣을 수 있습니다.
     }
-    
- // 리뷰 추가 편의 메서드
+
+    // 리뷰 추가 편의 메서드
     public void addReview(Review review) {
         this.reviews.add(review);
         if (review.getOrder() != this) {
@@ -143,7 +135,7 @@ public class Order {
             report.setOrder(this);
         }
     }
-    
+
     public Long getOpponentId(Long currentUserId) {
         if (this.user.getUserId().equals(currentUserId)) {
             // 내가 화주라면 상대방은 차주(driverNo)
@@ -158,24 +150,27 @@ public class Order {
             throw new IllegalStateException("해당 오더의 당사자가 아닙니다.");
         }
     }
-   
+
     // 편의 메서드 수정
     public void setSettlement(Settlement settlement) {
         this.settlement = settlement;
-        if (settlement.getOrder() != this) settlement.setOrder(this);
+        if (settlement.getOrder() != this)
+            settlement.setOrder(this);
     }
 
     public void setAdminControl(AdminControl adminControl) {
         this.adminControl = adminControl;
-        if (adminControl.getOrder() != this) adminControl.setOrder(this);
+        if (adminControl.getOrder() != this)
+            adminControl.setOrder(this);
     }
 
     public void setCancellationInfo(CancellationInfo cancellationInfo) {
         this.cancellationInfo = cancellationInfo;
-        if (cancellationInfo.getOrder() != this) cancellationInfo.setOrder(this);
+        if (cancellationInfo.getOrder() != this)
+            cancellationInfo.setOrder(this);
     }
-    
- // Order.java 내부에 추가
+
+    // Order.java 내부에 추가
     public void assignDriver(Long driverNo, String status) {
         this.driverNo = driverNo;
         this.status = status;
@@ -191,40 +186,44 @@ public class Order {
     @Embedded
     private DriverTimeline driverTimeline;
 
- // Order.java 내부
+    // Order.java 내부
     @CreationTimestamp
     @Column(name = "CREATED_AT", updatable = false)
     private LocalDateTime createdAt; // 이 필드가 반드시 Order 엔티티 직속으로 있어야 합니다.
 
-    
- // 응답용 내부 DTO
-    @Getter @AllArgsConstructor
+    // 응답용 내부 DTO
+    @Getter
+    @AllArgsConstructor
     public static class RouteStatisticsResponse {
         private String startProvince;
         private String endProvince;
         private long orderCount;
     }
-    
-    @Getter @AllArgsConstructor
+
+    @Getter
+    @AllArgsConstructor
     public static class ProvinceStatResponse {
         private String province;
         private long count;
     }
- // --- 응답 DTO ---
-    @Getter @AllArgsConstructor
+
+    // --- 응답 DTO ---
+    @Getter
+    @AllArgsConstructor
     public static class RouteStatResponse {
         private String startProvince;
         private String endProvince;
         private long count;
     }
 
-    @Getter @AllArgsConstructor
+    @Getter
+    @AllArgsConstructor
     public static class ProvinceAnalysisResponse {
         private String province;
         private long orderCount;
         private long totalSales; // 해당 지역의 총 매출액
     }
-    
+
     /**
      * 기사가 배차 신청을 했을 때 목록에 추가
      */
@@ -245,8 +244,7 @@ public class Order {
             throw new IllegalArgumentException("신청자 명단에 없는 기사입니다.");
         }
     }
-    
-    
+
     public static Order createOrder(Users user, OrderRequest request) {
         // 1. 변하지 않는 상세 정보를 한데 묶음
         OrderSnapshot snapshot = OrderSnapshot.builder()
@@ -254,6 +252,7 @@ public class Order {
                 .startPlace(request.getStartPlace())
                 .startType(request.getStartType())
                 .startSchedule(request.getStartSchedule())
+                .startNbhId(request.getStartNbhId()) // 지역 코드 매핑 추가
                 .startLat(request.getStartLat())
                 .startLng(request.getStartLng())
                 .puProvince(request.getPuProvince())
@@ -261,6 +260,7 @@ public class Order {
                 .endPlace(request.getEndPlace())
                 .endType(request.getEndType())
                 .endSchedule(request.getEndSchedule())
+                .endNbhId(request.getEndNbhId()) // 지역 코드 매핑 추가
                 .doProvince(request.getDoProvince())
                 .cargoContent(request.getCargoContent())
                 .loadMethod(request.getLoadMethod())

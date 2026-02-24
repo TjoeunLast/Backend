@@ -43,23 +43,19 @@ public class Users implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_user_id_gen")
-    @SequenceGenerator(
-            name = "seq_user_id_gen",
-            sequenceName = "SEQ_USER_ID",
-            allocationSize = 1
-    )
+    @SequenceGenerator(name = "seq_user_id_gen", sequenceName = "SEQ_USER_ID", allocationSize = 1)
     @Column(name = "user_id")
     private Long userId;
 
     @Column(length = 50)
     private String name;
-    
+
     @Column(length = 50)
     private String nickname;
 
     @Column(length = 1)
     private String gender;
-    
+
     private Integer age;
 
     @Column(length = 100, unique = true)
@@ -92,21 +88,20 @@ public class Users implements UserDetails {
     private String phone;
 
     private Long ratingAvg;
-    
+
     @Builder.Default
     private Long user_level = 0L; // 등급 필드: 기본값 0 배정
-    
- // User.java 내부
+
+    // User.java 내부
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private Shipper shipper;
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private Driver driver;
-    
-    
+
     private LocalDateTime rate;
-    
- // 기존 코드에 필드 추가
+
+    // 기존 코드에 필드 추가
     @Column(name = "fcm_token")
     private String fcmToken; // Flutter 앱에서 발급받아 서버로 보내준 토큰 저장
 
@@ -114,11 +109,15 @@ public class Users implements UserDetails {
     public void updateFcmToken(String fcmToken) {
         this.fcmToken = fcmToken;
     }
-    
+
+    public String getFcmToken() {
+        return this.fcmToken;
+    }
+
     @Embedded
     private ImageInfo profileImage;
 
- // 이미지 업데이트 편의 메서드
+    // 이미지 업데이트 편의 메서드
     public void updateProfileImage(ImageUploadResponse res) {
         this.profileImage = new ImageInfo(res);
     }
@@ -127,8 +126,8 @@ public class Users implements UserDetails {
     public void clearProfileImage() {
         this.profileImage = null;
     }
-    
- // 화주 정보 설정 편의 메서드
+
+    // 화주 정보 설정 편의 메서드
     public void setShipper(Shipper shipper) {
         this.shipper = shipper;
         if (shipper != null && shipper.getUser() != this) {
@@ -143,44 +142,44 @@ public class Users implements UserDetails {
             driver.setUser(this);
         }
     }
-    
+
     // 등급 업데이트 메서드 (필요시)
     public void updateLevel(Long newLevel) {
         this.user_level = newLevel;
     }
-    
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority(role.name()));
     }
 
     @Override
-    public String getUsername() { 
-        return email; 
+    public String getUsername() {
+        return email;
     }
 
     @Override
-    public String getPassword() { 
-        return password; 
+    public String getPassword() {
+        return password;
     }
 
     @Override
-    public boolean isAccountNonExpired() { 
-        return true; 
+    public boolean isAccountNonExpired() {
+        return true;
     }
 
     @Override
-    public boolean isAccountNonLocked() { 
-        return true; 
+    public boolean isAccountNonLocked() {
+        return true;
     }
 
     @Override
-    public boolean isCredentialsNonExpired() { 
-        return true; 
+    public boolean isCredentialsNonExpired() {
+        return true;
     }
 
     @Override
-    public boolean isEnabled() { 
-        return "N".equals(delflag); 
+    public boolean isEnabled() {
+        return "N".equals(delflag);
     }
 }

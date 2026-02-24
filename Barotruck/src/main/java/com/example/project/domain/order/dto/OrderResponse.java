@@ -28,10 +28,10 @@ public class OrderResponse {
     private String status;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
-    
+
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updated;
-    
+
     // 정산 상태 필드
     private String settlementStatus;
 
@@ -42,10 +42,10 @@ public class OrderResponse {
     private String startSchedule;
     private String puProvince;
 
- // 상차지 좌표
+    // 상차지 좌표
     private BigDecimal startLat;
     private BigDecimal startLng;
-    
+
     // 하차지
     private String endAddr;
     private String endPlace;
@@ -69,11 +69,14 @@ public class OrderResponse {
     private Long packagingPrice;
     private Long insuranceFee;
     private String payMethod;
-    
+
     private boolean instant; // 즉시배차 , 배정배차
     private String memo;
     private List<String> tag;
-    
+
+    // 오더의 출발/도착 지역 코드
+    private Long startNbhId;
+    private Long endNbhId;
 
     // 시스템 지표
     private Long distance;
@@ -87,15 +90,16 @@ public class OrderResponse {
 
     public static OrderResponse from(Order order) {
         OrderSnapshot s = order.getSnapshot();
-        if (s == null) return null;
+        if (s == null)
+            return null;
 
         return OrderResponse.builder()
                 .orderId(order.getOrderId())
                 .status(order.getStatus())
-                
+
                 // 매필 로직 추가 정산
                 .settlementStatus(order.getSettlement() != null ? order.getSettlement().getStatus() : "READY")
-                
+
                 .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
                 .distance(order.getDistance())
@@ -129,6 +133,9 @@ public class OrderResponse {
                 .instant(s.isInstant())
                 .memo(s.getMemo())
                 .tag(s.getTag())
+                .startNbhId(s.getStartNbhId())
+                .endNbhId(s.getEndNbhId())
+
                 // 요약 정보
                 .user(UserSummary.from(order.getUser()))
                 .cancellation(CancellationSummary.from(order.getCancellationInfo()))
@@ -151,7 +158,8 @@ public class OrderResponse {
         private Role role;
 
         public static UserSummary from(com.example.project.member.domain.Users userEntity) {
-            if (userEntity == null) return null;
+            if (userEntity == null)
+                return null;
             return UserSummary.builder()
                     .userId(userEntity.getUserId())
                     .email(userEntity.getEmail())
@@ -176,7 +184,8 @@ public class OrderResponse {
         private String cancelledBy;
 
         public static CancellationSummary from(com.example.project.domain.order.domain.CancellationInfo info) {
-            if (info == null) return null;
+            if (info == null)
+                return null;
             return CancellationSummary.builder()
                     .cancelReason(info.getCancelReason())
                     .cancelledAt(info.getCancelledAt())
@@ -184,50 +193,5 @@ public class OrderResponse {
                     .build();
         }
     }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class PaymentSummary {
-        private Long paymentId;
-        private BigDecimal chargedAmount;
-        private BigDecimal receivedAmount;
-        private BigDecimal feeAmount;
-        private PaymentMethod method;
-        private TransportPaymentStatus status;
-        private LocalDateTime paidAt;
-        private LocalDateTime confirmedAt;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class ProofSummary {
-        private Long proofId;
-        private String receiptImageUrl;
-        private String signatureImageUrl;
-        private String recipientName;
-        private LocalDateTime createdAt;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class DisputeSummary {
-        private Long disputeId;
-        private Long requesterUserId;
-        private Long createdByUserId;
-        private PaymentDisputeReason reasonCode;
-        private String description;
-        private String attachmentUrl;
-        private PaymentDisputeStatus status;
-        private String adminMemo;
-        private LocalDateTime requestedAt;
-        private LocalDateTime processedAt;
-    }
-    
 
 }
