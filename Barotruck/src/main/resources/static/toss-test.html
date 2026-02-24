@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Toss Payment Test</title>
+    <script src="https://js.tosspayments.com/v2/standard"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; color: #111827; }
+        .wrap { max-width: 1080px; margin: 24px auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; }
+        h1 { font-size: 24px; margin: 0 0 12px; }
+        h2 { font-size: 18px; margin: 20px 0 10px; }
+        .hint { font-size: 13px; color: #4b5563; margin-bottom: 10px; }
+        .row { display: grid; grid-template-columns: 220px 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
+        label { font-size: 14px; color: #374151; }
+        input, textarea, button { font-size: 14px; }
+        input, textarea {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 8px;
+        }
+        textarea { min-height: 72px; resize: vertical; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        button {
+            border: 0;
+            border-radius: 6px;
+            background: #0f766e;
+            color: #fff;
+            padding: 9px 14px;
+            cursor: pointer;
+        }
+        button.secondary { background: #374151; }
+        button.warn { background: #b45309; }
+        button.blue { background: #1d4ed8; }
+        .box {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #fafafa;
+            padding: 12px;
+            overflow: auto;
+        }
+        .mono { font-family: Consolas, monospace; }
+        pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>Toss 결제 테스트 페이지</h1>
+    <div class="hint">
+        입력 3개만 사용: 화주 토큰, 차주 토큰, 토스 클라이언트 키<br>
+        순서: 0) 오더 자동 생성 -> 1) Prepare -> 2) 결제창 -> 3) 화주 Confirm -> 4) 차주 Confirm
+    </div>
+
+    <div class="row">
+        <label>Base URL (자동)</label>
+        <input id="baseUrl" class="mono" readonly>
+    </div>
+    <div class="row">
+        <label for="shipperToken">Shipper Token</label>
+        <textarea id="shipperToken" class="mono" placeholder="Bearer 제외 access token"></textarea>
+    </div>
+    <div class="row">
+        <label for="driverToken">Driver Token</label>
+        <textarea id="driverToken" class="mono" placeholder="Bearer 제외 access token"></textarea>
+    </div>
+    <div class="row">
+        <label for="clientKey">Toss Client Key</label>
+        <input id="clientKey" class="mono" placeholder="test_ck_...">
+    </div>
+    <div class="row">
+        <label for="internalOrderId">Internal Order ID (자동)</label>
+        <input id="internalOrderId" class="mono" readonly>
+    </div>
+    <div class="row">
+        <label for="pgOrderId">PG Order ID (자동)</label>
+        <input id="pgOrderId" class="mono" readonly>
+    </div>
+    <div class="row">
+        <label>Success URL (자동)</label>
+        <input id="successUrl" class="mono" readonly>
+    </div>
+    <div class="row">
+        <label>Fail URL (자동)</label>
+        <input id="failUrl" class="mono" readonly>
+    </div>
+
+    <div class="actions">
+        <button type="button" class="secondary" onclick="saveInputs()">입력 저장</button>
+        <button type="button" class="blue" onclick="autoCreateOrder()">0) 오더 자동 생성</button>
+        <button type="button" onclick="preparePayment()">1) Prepare</button>
+        <button type="button" onclick="openPaymentWindow()">2) 결제창 열기</button>
+        <button type="button" class="warn" onclick="confirmPayment()">3) 화주 Confirm</button>
+        <button type="button" class="warn" onclick="driverConfirm()">4) 차주 Confirm</button>
+    </div>
+
+    <h2>Prepare 결과</h2>
+    <div class="box mono"><pre id="prepareSummary">none</pre></div>
+
+    <h2>리다이렉트 파라미터</h2>
+    <div class="box mono"><pre id="redirectSummary">none</pre></div>
+
+    <h2>로그</h2>
+    <div class="box mono"><pre id="log">ready</pre></div>
+</div>
+
+<script>
+    const LS_INPUT = "toss_test_inputs_v3";
+    const LS_PREPARE = "toss_test_prepare_v3";
+    const LS_PG_ORDER_MAP = "toss_test_pg_order_map_v3";
+    const DEFAULT_PAY_METHOD = "CARD";
+    const DEFAULT_PAY_CHANNEL = "APP_CARD";
+
+    function log(message, payload) {
+        const el = document.getElementById("log");
+        const line = "[" + new Date().toISOString() + "] " + message;
+        if (payload === undefined) {
+            el.textContent += "\n" + line;
+            return;
+        }
+        let pretty;
+        try {
+            pretty = JSON.stringify(payload, null, 2);
+        } catch (e) {
+            pretty = String(payload);
+        }
+        el.textContent += "\n" + line + "\n" + pretty;
+    }
+
+    function getBaseUrl() {
+        return window.location.origin;
+    }
+
+    function getCallbackBase() {
+        return window.location.origin + window.location.pathname;
+    }
+
+    function getSuccessUrl() {
+        return getCallbackBase() + "?flow=success";
+    }
+
+    function getFailUrl() {
+        return getCallbackBase() + "?flow=fail";
+    }
+
+    function getInputValues() {
+        return {
+            shipperToken: document.getElementById("shipperToken").value.trim(),
+            driverToken: document.getElementById("driverToken").value.trim(),
+            clientKey: document.getElementById("clientKey").value.trim(),
+            internalOrderId: document.getElementById("internalOrderId").value.trim(),
+            pgOrderId: document.getElementById("pgOrderId").value.trim()
+        };
+    }
+
+    function setAutoFields() {
+        document.getElementById("baseUrl").value = getBaseUrl();
+        document.getElementById("successUrl").value = getSuccessUrl();
+        document.getElementById("failUrl").value = getFailUrl();
+    }
+
+    function setOrderId(orderId) {
+        document.getElementById("internalOrderId").value = orderId ? String(orderId) : "";
+    }
+
+    function setPgOrderId(pgOrderId) {
+        document.getElementById("pgOrderId").value = pgOrderId ? String(pgOrderId) : "";
+    }
+
+    function saveInputs() {
+        const v = getInputValues();
+        localStorage.setItem(LS_INPUT, JSON.stringify(v));
+        log("inputs saved", v);
+    }
+
+    function loadInputs() {
+        const raw = localStorage.getItem(LS_INPUT);
+        const saved = raw ? JSON.parse(raw) : {};
+        document.getElementById("shipperToken").value = saved.shipperToken || "";
+        document.getElementById("driverToken").value = saved.driverToken || "";
+        document.getElementById("clientKey").value = saved.clientKey || "";
+        setOrderId(saved.internalOrderId || "");
+        setPgOrderId(saved.pgOrderId || "");
+    }
+
+    function setPrepareState(state) {
+        localStorage.setItem(LS_PREPARE, JSON.stringify(state));
+        renderPrepareSummary();
+    }
+
+    function getPrepareState() {
+        const raw = localStorage.getItem(LS_PREPARE);
+        return raw ? JSON.parse(raw) : null;
+    }
+
+    function setPgOrderMap(pgOrderId, internalOrderId) {
+        const raw = localStorage.getItem(LS_PG_ORDER_MAP);
+        const map = raw ? JSON.parse(raw) : {};
+        map[String(pgOrderId)] = String(internalOrderId);
+        localStorage.setItem(LS_PG_ORDER_MAP, JSON.stringify(map));
+    }
+
+    function getInternalOrderIdByPg(pgOrderId) {
+        const raw = localStorage.getItem(LS_PG_ORDER_MAP);
+        const map = raw ? JSON.parse(raw) : {};
+        return map[String(pgOrderId)] || null;
+    }
+
+    function getRedirectParams() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            flow: params.get("flow"),
+            paymentKey: params.get("paymentKey"),
+            orderId: params.get("orderId"),
+            amount: params.get("amount"),
+            code: params.get("code"),
+            message: params.get("message")
+        };
+    }
+
+    function renderPrepareSummary() {
+        const state = getPrepareState();
+        const el = document.getElementById("prepareSummary");
+        el.textContent = state ? JSON.stringify(state, null, 2) : "none";
+    }
+
+    function renderRedirectSummary() {
+        const redirect = getRedirectParams();
+        const el = document.getElementById("redirectSummary");
+        el.textContent = JSON.stringify(redirect, null, 2);
+    }
+
+    async function readResponseBody(res) {
+        const rawText = await res.text();
+        if (!rawText) return {};
+        try {
+            return JSON.parse(rawText);
+        } catch (e) {
+            return { raw: rawText };
+        }
+    }
+
+    function extractBodyData(json) {
+        if (!json) return null;
+        if (json.success === true && json.data !== undefined) return json.data;
+        return json;
+    }
+
+    function buildDummyOrderRequest() {
+        const now = Date.now();
+        return {
+            startAddr: "서울 종로구 테스트출발 " + now,
+            startPlace: "테스트 출발지",
+            startType: "당상",
+            startSchedule: "오늘 14:00",
+            puProvince: "서울",
+            startLat: 37.5729,
+            startLng: 126.9794,
+            endAddr: "경기 수원시 테스트도착 " + now,
+            endPlace: "테스트 도착지",
+            endType: "당착",
+            endSchedule: "오늘 18:00",
+            doProvince: "경기",
+            cargoContent: "테스트 화물",
+            loadMethod: "지게차",
+            workType: "카고",
+            tonnage: 1.0,
+            reqCarType: "카고",
+            reqTonnage: "1톤",
+            driveMode: "편도",
+            loadWeight: 1000,
+            basePrice: 50000,
+            laborFee: 3000,
+            packagingPrice: 1000,
+            insuranceFee: 1000,
+            payMethod: "카드",
+            instant: true,
+            memo: "toss auto e2e",
+            tag: ["toss", "auto"],
+            distance: 12000,
+            duration: 1800
+        };
+    }
+
+    async function autoCreateOrder() {
+        const v = getInputValues();
+        if (!v.shipperToken || !v.driverToken) {
+            alert("shipperToken, driverToken are required");
+            return;
+        }
+
+        saveInputs();
+        const baseUrl = getBaseUrl();
+        const createUrl = baseUrl + "/api/v1/orders";
+        const createBody = buildDummyOrderRequest();
+        log("order create request", { url: createUrl, body: createBody });
+
+        const createRes = await fetch(createUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + v.shipperToken
+            },
+            body: JSON.stringify(createBody)
+        });
+        const createJson = await readResponseBody(createRes);
+        log("order create response", { status: createRes.status, body: createJson });
+
+        if (!createRes.ok) {
+            alert("order create failed");
+            return;
+        }
+        const created = extractBodyData(createJson);
+        const orderId = created && created.orderId;
+        if (!orderId) {
+            alert("orderId not found in create response");
+            return;
+        }
+
+        const acceptUrl = baseUrl + "/api/v1/orders/" + orderId + "/accept";
+        log("driver accept request", { url: acceptUrl });
+        const acceptRes = await fetch(acceptUrl, {
+            method: "PATCH",
+            headers: {
+                "Authorization": "Bearer " + v.driverToken
+            }
+        });
+        const acceptJson = await readResponseBody(acceptRes);
+        log("driver accept response", { status: acceptRes.status, body: acceptJson });
+
+        if (!acceptRes.ok) {
+            alert("driver accept failed");
+            return;
+        }
+
+        setOrderId(orderId);
+        saveInputs();
+        alert("auto create success, orderId=" + orderId);
+    }
+
+    async function preparePayment() {
+        const v = getInputValues();
+        if (!v.shipperToken || !v.internalOrderId) {
+            alert("shipperToken and orderId are required");
+            return;
+        }
+
+        saveInputs();
+        const baseUrl = getBaseUrl();
+        const url = baseUrl + "/api/v1/payments/orders/" + v.internalOrderId + "/toss/prepare";
+        const body = {
+            method: DEFAULT_PAY_METHOD,
+            payChannel: DEFAULT_PAY_CHANNEL,
+            successUrl: getSuccessUrl(),
+            failUrl: getFailUrl()
+        };
+        log("prepare request", { url, body });
+
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + v.shipperToken
+            },
+            body: JSON.stringify(body)
+        });
+        const json = await readResponseBody(res);
+        log("prepare response", { status: res.status, body: json });
+
+        if (!res.ok || !json.success) {
+            alert("prepare failed");
+            return;
+        }
+
+        const prepared = json.data;
+        const state = {
+            ...prepared,
+            internalOrderId: String(v.internalOrderId),
+            payMethod: DEFAULT_PAY_METHOD,
+            payChannel: DEFAULT_PAY_CHANNEL
+        };
+        setPrepareState(state);
+        setPgOrderMap(prepared.pgOrderId, v.internalOrderId);
+        setPgOrderId(prepared.pgOrderId);
+        saveInputs();
+        alert("prepare success");
+    }
+
+    async function openPaymentWindow() {
+        const v = getInputValues();
+        const prepared = getPrepareState();
+        if (!prepared) {
+            alert("prepare first");
+            return;
+        }
+        if (!v.clientKey) {
+            alert("clientKey is required");
+            return;
+        }
+        if (!window.TossPayments) {
+            alert("Toss SDK not loaded");
+            return;
+        }
+
+        saveInputs();
+        const customerKey = "cust_" + Date.now();
+        const amountNumber = Number(prepared.amount);
+
+        try {
+            const tossPayments = window.TossPayments(v.clientKey);
+            const payment = tossPayments.payment({ customerKey });
+            await payment.requestPayment({
+                method: "CARD",
+                amount: {
+                    currency: "KRW",
+                    value: amountNumber
+                },
+                orderId: prepared.pgOrderId,
+                orderName: "Barotruck Toss Test",
+                successUrl: prepared.successUrl,
+                failUrl: prepared.failUrl
+            });
+        } catch (firstError) {
+            try {
+                const tossPayments = window.TossPayments(v.clientKey);
+                await tossPayments.requestPayment("카드", {
+                    amount: amountNumber,
+                    orderId: prepared.pgOrderId,
+                    orderName: "Barotruck Toss Test",
+                    successUrl: prepared.successUrl,
+                    failUrl: prepared.failUrl
+                });
+            } catch (fallbackError) {
+                log("payment window open failed", {
+                    firstError: String(firstError),
+                    fallbackError: String(fallbackError)
+                });
+                alert("payment window open failed");
+            }
+        }
+    }
+
+    async function confirmPayment() {
+        const v = getInputValues();
+        const prepared = getPrepareState();
+        const redirect = getRedirectParams();
+
+        if (!v.shipperToken) {
+            alert("shipperToken is required");
+            return;
+        }
+
+        const pgOrderId = redirect.orderId || (prepared && prepared.pgOrderId) || v.pgOrderId;
+        const paymentKey = redirect.paymentKey;
+        const amount = redirect.amount || (prepared && prepared.amount);
+        if (!pgOrderId || !paymentKey || !amount) {
+            alert("paymentKey/orderId/amount missing. run payment success redirect first");
+            return;
+        }
+
+        const internalOrderId = getInternalOrderIdByPg(pgOrderId) || v.internalOrderId;
+        if (!internalOrderId) {
+            alert("internalOrderId not found");
+            return;
+        }
+
+        const baseUrl = getBaseUrl();
+        const url = baseUrl + "/api/v1/payments/orders/" + internalOrderId + "/toss/confirm";
+        const body = {
+            paymentKey: paymentKey,
+            pgOrderId: pgOrderId,
+            amount: Number(amount)
+        };
+        log("shipper confirm request", { url, body });
+
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + v.shipperToken
+            },
+            body: JSON.stringify(body)
+        });
+        const json = await readResponseBody(res);
+        log("shipper confirm response", { status: res.status, body: json });
+
+        if (!res.ok || !json.success) {
+            alert("shipper confirm failed");
+            return;
+        }
+        alert("shipper confirm success");
+    }
+
+    async function driverConfirm() {
+        const v = getInputValues();
+        if (!v.driverToken || !v.internalOrderId) {
+            alert("driverToken and orderId are required");
+            return;
+        }
+
+        const baseUrl = getBaseUrl();
+        const url = baseUrl + "/api/v1/payments/orders/" + v.internalOrderId + "/confirm";
+        log("driver confirm request", { url });
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer " + v.driverToken
+            }
+        });
+        const json = await readResponseBody(res);
+        log("driver confirm response", { status: res.status, body: json });
+
+        if (!res.ok || !json.success) {
+            alert("driver confirm failed");
+            return;
+        }
+        alert("driver confirm success");
+    }
+
+    (function init() {
+        setAutoFields();
+        loadInputs();
+        renderPrepareSummary();
+        renderRedirectSummary();
+        log("page initialized", { url: window.location.href });
+    })();
+</script>
+</body>
+</html>

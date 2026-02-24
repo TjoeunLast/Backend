@@ -5,6 +5,7 @@ import com.example.project.domain.payment.domain.paymentEnum.PaymentProvider;
 import com.example.project.domain.payment.domain.paymentEnum.GatewayTxStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,5 +17,17 @@ public interface PaymentGatewayTransactionRepository extends JpaRepository<Payme
     Optional<PaymentGatewayTransaction> findTopByOrderIdAndProviderOrderByCreatedAtDesc(Long orderId, PaymentProvider provider);
 
     List<PaymentGatewayTransaction> findAllByProviderAndStatus(PaymentProvider provider, GatewayTxStatus status);
+
+    List<PaymentGatewayTransaction> findTop100ByProviderAndStatusAndNextRetryAtLessThanEqualOrderByNextRetryAtAsc(
+            PaymentProvider provider,
+            GatewayTxStatus status,
+            LocalDateTime nextRetryAt
+    );
+
+    List<PaymentGatewayTransaction> findTop100ByProviderAndStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
+            PaymentProvider provider,
+            GatewayTxStatus status,
+            LocalDateTime expiresAt
+    );
 }
 

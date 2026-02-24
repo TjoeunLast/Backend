@@ -1,7 +1,6 @@
 package com.example.project.domain.payment.controller;
 
 import com.example.project.domain.payment.dto.paymentRequest.*;
-import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeResponse;
 import com.example.project.domain.payment.dto.paymentResponse.TossPrepareResponse;
 import com.example.project.domain.payment.dto.paymentResponse.TransportPaymentResponse;
 import com.example.project.domain.payment.service.core.FeeInvoiceService;
@@ -9,6 +8,10 @@ import com.example.project.domain.payment.service.core.TransportPaymentService;
 import com.example.project.global.api.ApiResponse;
 import com.example.project.member.domain.Users;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +26,12 @@ public class PaymentController {
     private final TransportPaymentService transportPaymentService;
     private final FeeInvoiceService feeInvoiceService;
 
+    @GetMapping(value = "/toss-test", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<Resource> tossTestPage() {
+        Resource page = new ClassPathResource("static/toss-test.html");
+        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(page);
+    }
+
     @PostMapping("/orders/{orderId}/mark-paid")
     @PreAuthorize("hasRole('SHIPPER')")
     public ApiResponse<TransportPaymentResponse> markPaid(
@@ -34,6 +43,7 @@ public class PaymentController {
                 currentUser,
                 orderId,
                 request.getMethod(),
+                request.getPaymentTiming(),
                 request.getProofUrl(),
                 request.getPaidAt()
         );
@@ -117,7 +127,12 @@ public class PaymentController {
             @RequestBody ExternalPayRequest request,
             @AuthenticationPrincipal Users currentUser
     ) {
-        var p = transportPaymentService.externalPay(currentUser, orderId, request.getMethod());
+        var p = transportPaymentService.externalPay(
+                currentUser,
+                orderId,
+                request.getMethod(),
+                request.getPaymentTiming()
+        );
         return ApiResponse.ok(TransportPaymentResponse.from(p));
     }
 }

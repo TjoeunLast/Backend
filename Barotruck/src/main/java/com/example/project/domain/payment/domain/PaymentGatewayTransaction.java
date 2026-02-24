@@ -14,13 +14,13 @@ import java.time.LocalDateTime;
 @Table(
         name = "PAYMENT_GATEWAY_TRANSACTIONS",
         uniqueConstraints = {
-                @UniqueConstraint(name = "UK_PGTX_PROVIDER_PAYMENT_KEY", columnNames = {"PROVIDER", "PAYMENT_KEY"}),
                 @UniqueConstraint(name = "UK_PGTX_PROVIDER_PG_ORDER_ID", columnNames = {"PROVIDER", "PG_ORDER_ID"})
         },
         indexes = {
                 @Index(name = "IDX_PGTX_ORDER_ID", columnList = "ORDER_ID"),
                 @Index(name = "IDX_PGTX_SHIPPER_USER_ID", columnList = "SHIPPER_USER_ID"),
-                @Index(name = "IDX_PGTX_STATUS", columnList = "STATUS")
+                @Index(name = "IDX_PGTX_STATUS", columnList = "STATUS"),
+                @Index(name = "IDX_PGTX_PROVIDER_PAYMENT_KEY", columnList = "PROVIDER, PAYMENT_KEY")
         }
 )
 @Getter
@@ -107,6 +107,18 @@ public class PaymentGatewayTransaction {
     @Column(name = "FAIL_MESSAGE", length = 2000)
     private String failMessage;
 
+    // 재시도 횟수
+    @Column(name = "RETRY_COUNT", nullable = false)
+    private Integer retryCount;
+
+    // 마지막 재시도 시각
+    @Column(name = "LAST_RETRY_AT")
+    private LocalDateTime lastRetryAt;
+
+    // 다음 재시도 가능 시각
+    @Column(name = "NEXT_RETRY_AT")
+    private LocalDateTime nextRetryAt;
+
     // PG 원본 응답 payload
     @Lob
     @Column(name = "RAW_PAYLOAD")
@@ -124,6 +136,9 @@ public class PaymentGatewayTransaction {
     void onCreate() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = this.createdAt;
+        if (this.retryCount == null) {
+            this.retryCount = 0;
+        }
     }
 
     @PreUpdate
@@ -158,6 +173,7 @@ public class PaymentGatewayTransaction {
                 .successUrl(successUrl)
                 .failUrl(failUrl)
                 .expiresAt(expiresAt)
+                .retryCount(0)
                 .build();
     }
 
@@ -170,19 +186,79 @@ public class PaymentGatewayTransaction {
         this.failMessage = null;
         this.status = GatewayTxStatus.CONFIRMED;
         this.approvedAt = LocalDateTime.now();
+        this.nextRetryAt = null;
     }
 
     // 승인 실패 반영
     public void markFailed(String failCode, String failMessage, String rawPayload) {
+        markFailed(failCode, failMessage, rawPayload, true);
+    }
+
+    public void markFailed(String failCode, String failMessage, String rawPayload, boolean retryable) {
         this.failCode = failCode;
         this.failMessage = failMessage;
         this.rawPayload = rawPayload;
         this.status = GatewayTxStatus.FAILED;
+        if (retryable) {
+            scheduleNextRetry();
+        } else {
+            this.lastRetryAt = LocalDateTime.now();
+            this.nextRetryAt = null;
+        }
     }
 
     // 취소 반영
     public void markCanceled(String rawPayload) {
         this.rawPayload = rawPayload;
         this.status = GatewayTxStatus.CANCELED;
+        this.nextRetryAt = null;
+    }
+
+    public void markExpired() {
+        markFailed("TX_EXPIRED", "prepared transaction expired", this.rawPayload, false);
+    }
+
+    public void bindPaymentKey(String paymentKey) {
+        if (paymentKey == null || paymentKey.isBlank()) {
+            return;
+        }
+        this.paymentKey = paymentKey;
+    }
+
+    public boolean isExpired(LocalDateTime now) {
+        return this.expiresAt != null && now != null && now.isAfter(this.expiresAt);
+    }
+
+    public boolean canRetry(LocalDateTime now, int maxRetries) {
+        if (this.status != GatewayTxStatus.FAILED) {
+            return false;
+        }
+        if (now == null || maxRetries <= 0) {
+            return false;
+        }
+        int attempts = this.retryCount == null ? 0 : this.retryCount;
+        if (attempts >= maxRetries) {
+            return false;
+        }
+        if (this.paymentKey == null || this.paymentKey.isBlank()) {
+            return false;
+        }
+        return this.nextRetryAt != null && !this.nextRetryAt.isAfter(now);
+    }
+
+    public void stopRetry(String failCode, String failMessage) {
+        this.status = GatewayTxStatus.FAILED;
+        this.failCode = failCode;
+        this.failMessage = failMessage;
+        this.lastRetryAt = LocalDateTime.now();
+        this.nextRetryAt = null;
+    }
+
+    private void scheduleNextRetry() {
+        int attempts = this.retryCount == null ? 0 : this.retryCount;
+        this.retryCount = attempts + 1;
+        this.lastRetryAt = LocalDateTime.now();
+        long backoffMinutes = Math.min(60L, 1L << Math.min(this.retryCount - 1, 6));
+        this.nextRetryAt = this.lastRetryAt.plusMinutes(backoffMinutes);
     }
 }

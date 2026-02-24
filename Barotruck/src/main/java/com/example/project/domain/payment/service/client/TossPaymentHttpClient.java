@@ -3,6 +3,7 @@ package com.example.project.domain.payment.service.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -16,6 +17,7 @@ import java.util.Base64;
 import java.util.UUID;
 
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class TossPaymentHttpClient implements TossPaymentClient {
 
@@ -28,9 +30,22 @@ public class TossPaymentHttpClient implements TossPaymentClient {
     @Value("${payment.toss.secret-key:}")
     private String tossSecretKey;
 
+    @Value("${payment.toss.mock-confirm-enabled:false}")
+    private boolean mockConfirmEnabled;
+
     @Override
     public ConfirmResult confirm(String paymentKey, String pgOrderId, BigDecimal amount) {
         if (tossSecretKey == null || tossSecretKey.isBlank()) {
+            if (!mockConfirmEnabled) {
+                return new ConfirmResult(
+                        false,
+                        null,
+                        "TOSS_SECRET_KEY_MISSING",
+                        "payment.toss.secret-key is required for real toss confirm",
+                        null
+                );
+            }
+            log.warn("toss secret key missing. fallback mock confirm is enabled.");
             String mockTid = "MOCK-TOSS-" + UUID.randomUUID();
             String raw = "{\"mock\":true,\"orderId\":\"" + pgOrderId + "\",\"paymentKey\":\"" + paymentKey + "\"}";
             return new ConfirmResult(true, mockTid, null, null, raw);

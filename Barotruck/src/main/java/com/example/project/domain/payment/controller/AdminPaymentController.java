@@ -6,6 +6,8 @@ import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeResp
 import com.example.project.domain.payment.service.core.DriverPayoutService;
 import com.example.project.domain.payment.service.core.FeeInvoiceBatchService;
 import com.example.project.domain.payment.service.core.FeeInvoiceService;
+import com.example.project.domain.payment.service.core.PaymentReconciliationService;
+import com.example.project.domain.payment.service.core.PaymentRetryQueueService;
 import com.example.project.domain.payment.service.core.TransportPaymentService;
 import com.example.project.global.api.ApiResponse;
 import com.example.project.member.domain.Users;
@@ -25,6 +27,8 @@ public class AdminPaymentController {
     private final FeeInvoiceBatchService feeInvoiceBatchService;
     private final DriverPayoutService driverPayoutService;
     private final FeeInvoiceService feeInvoiceService;
+    private final PaymentReconciliationService paymentReconciliationService;
+    private final PaymentRetryQueueService paymentRetryQueueService;
 
     // 관리자/배치용 (MVP)
     @PostMapping("/orders/{orderId}/disputes")
@@ -70,6 +74,22 @@ public class AdminPaymentController {
     @PostMapping("/payout-items/{itemId}/retry")
     public ApiResponse<?> retryPayoutItem(@PathVariable("itemId") Long itemId) {
         return ApiResponse.ok(driverPayoutService.retryItem(itemId));
+    }
+
+    @PostMapping("/toss/expire-prepared/run")
+    public ApiResponse<?> runExpirePrepared() {
+        return ApiResponse.ok(paymentRetryQueueService.expirePreparedTransactions());
+    }
+
+    @PostMapping("/toss/retries/run")
+    public ApiResponse<?> runTossRetryQueue() {
+        return ApiResponse.ok(paymentRetryQueueService.processFailedRetryQueue());
+    }
+
+    @PostMapping("/reconciliation/run")
+    public ApiResponse<?> runReconciliation() {
+        paymentReconciliationService.runDailyReconciliation();
+        return ApiResponse.ok(true);
     }
 
 }
