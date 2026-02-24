@@ -1,6 +1,5 @@
 package com.example.project.domain.review.repository;
 
-
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,5 +21,11 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.target.userId = :targetId")
     Double getAverageRatingByTargetId(@Param("targetId") Long targetId);
-    
+
+    // 전체 리뷰 목록 최신순 조회
+    List<Review> findAllByOrderByCreatedAtDesc();
+
+    // 내가 쓴 리뷰 목록 최신순 조회
+    List<Review> findByWriter_UserIdOrderByCreatedAtDesc(Long userId);
+
 }
