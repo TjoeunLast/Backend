@@ -107,6 +107,12 @@ public class TossPaymentService {
                 .findByProviderAndPgOrderId(PaymentProvider.TOSS, request.getPgOrderId())
                 .orElseThrow(() -> new IllegalArgumentException("prepared transaction not found"));
 
+        if (tx.getStatus() != GatewayTxStatus.CONFIRMED && tx.isExpired(LocalDateTime.now())) {
+            tx.markExpired();
+            paymentGatewayTransactionRepository.save(tx);
+            throw new IllegalStateException("prepared transaction expired");
+        }
+
         if (!tx.getOrderId().equals(orderId)) {
             throw new IllegalStateException("transaction/order mismatch");
         }
@@ -125,6 +131,12 @@ public class TossPaymentService {
                     }
                 });
 
+        if (tx.getStatus() == GatewayTxStatus.CANCELED) {
+            throw new IllegalStateException("transaction already canceled");
+        }
+
+        tx.bindPaymentKey(request.getPaymentKey());
+
         if (tx.getStatus() == GatewayTxStatus.CONFIRMED) {
             return paymentLifecycleService.applyPaidFromGatewayTx(tx);
         }
@@ -133,7 +145,12 @@ public class TossPaymentService {
                 tossPaymentClient.confirm(request.getPaymentKey(), request.getPgOrderId(), request.getAmount());
 
         if (!confirmResult.success()) {
-            tx.markFailed(confirmResult.failCode(), confirmResult.failMessage(), confirmResult.rawPayload());
+            tx.markFailed(
+                    confirmResult.failCode(),
+                    confirmResult.failMessage(),
+                    confirmResult.rawPayload(),
+                    isRetryableFailure(confirmResult.failCode(), confirmResult.failMessage())
+            );
             paymentGatewayTransactionRepository.save(tx);
             throw new IllegalStateException("toss confirm failed: " + defaultIfBlank(confirmResult.failMessage(), "unknown"));
         }
@@ -196,7 +213,12 @@ public class TossPaymentService {
                 paymentGatewayTransactionRepository.save(tx);
                 webhookEvent.markProcessed("CANCELED");
             } else if (isFailedStatus(status)) {
-                tx.markFailed(readText(node, "code"), firstNonBlank(readText(node, "message"), readText(node, "failReason")), safePayload);
+                tx.markFailed(
+                        readText(node, "code"),
+                        firstNonBlank(readText(node, "message"), readText(node, "failReason")),
+                        safePayload,
+                        false
+                );
                 paymentGatewayTransactionRepository.save(tx);
                 webhookEvent.markProcessed("FAILED");
             } else if (isConfirmedStatus(status)) {
@@ -286,6 +308,22 @@ public class TossPaymentService {
 
     private boolean isCanceledStatus(String status) {
         return status.toUpperCase(Locale.ROOT).contains("CANCEL");
+    }
+
+    private boolean isRetryableFailure(String failCode, String failMessage) {
+        String code = defaultIfBlank(failCode, "").toUpperCase(Locale.ROOT);
+        String message = defaultIfBlank(failMessage, "").toUpperCase(Locale.ROOT);
+
+        if (code.contains("INVALID") || code.contains("UNAUTHORIZED")) {
+            return false;
+        }
+        if (code.contains("AMOUNT_MISMATCH") || message.contains("AMOUNT")) {
+            return false;
+        }
+        if (code.contains("EXPIRED")) {
+            return false;
+        }
+        return true;
     }
 
     private String readText(JsonNode node, String fieldName) {

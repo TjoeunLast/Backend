@@ -1,6 +1,7 @@
 package com.example.project.domain.payment.domain;
 
 import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentTiming;
 import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -64,6 +65,10 @@ public class TransportPayment {
     @Column(name = "METHOD", nullable = false, length = 20)
     private PaymentMethod method;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "PAYMENT_TIMING", length = 20)
+    private PaymentTiming paymentTiming;
+
     // 결제 상태
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS", nullable = false, length = 40)
@@ -100,6 +105,30 @@ public class TransportPayment {
             BigDecimal netAmountSnapshot,
             PaymentMethod method
     ) {
+        return ready(
+                orderId,
+                shipperUserId,
+                driverUserId,
+                amount,
+                feeRateSnapshot,
+                feeAmountSnapshot,
+                netAmountSnapshot,
+                method,
+                PaymentTiming.PREPAID
+        );
+    }
+
+    public static TransportPayment ready(
+            Long orderId,
+            Long shipperUserId,
+            Long driverUserId,
+            BigDecimal amount,
+            BigDecimal feeRateSnapshot,
+            BigDecimal feeAmountSnapshot,
+            BigDecimal netAmountSnapshot,
+            PaymentMethod method,
+            PaymentTiming paymentTiming
+    ) {
         return TransportPayment.builder()
                 .orderId(orderId)
                 .shipperUserId(shipperUserId)
@@ -109,6 +138,7 @@ public class TransportPayment {
                 .feeAmountSnapshot(feeAmountSnapshot)
                 .netAmountSnapshot(netAmountSnapshot)
                 .method(method)
+                .paymentTiming(paymentTiming)
                 .status(TransportPaymentStatus.READY)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -140,5 +170,12 @@ public class TransportPayment {
     // PG 거래 식별자 반영
     public void setPgTid(String pgTid) {
         this.pgTid = pgTid;
+    }
+
+    public void applyPaymentTiming(PaymentTiming paymentTiming) {
+        if (paymentTiming == null) {
+            return;
+        }
+        this.paymentTiming = paymentTiming;
     }
 }

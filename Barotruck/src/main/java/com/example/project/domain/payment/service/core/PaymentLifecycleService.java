@@ -4,6 +4,7 @@ import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.payment.domain.PaymentGatewayTransaction;
 import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentTiming;
 import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
 import com.example.project.domain.payment.port.OrderPort;
 import com.example.project.domain.payment.port.UserPort;
@@ -39,6 +40,7 @@ public class PaymentLifecycleService {
             Users currentUser,
             Long orderId,
             PaymentMethod method,
+            PaymentTiming paymentTiming,
             String proofUrl,
             LocalDateTime paidAt
     ) {
@@ -70,7 +72,8 @@ public class PaymentLifecycleService {
                         fee.feeRate(),
                         fee.feeAmount(),
                         fee.netAmount(),
-                        method
+                        method,
+                        resolvePaymentTiming(paymentTiming)
                 ));
 
         if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED
@@ -78,6 +81,7 @@ public class PaymentLifecycleService {
             return transportPayment;
         }
 
+        transportPayment.applyPaymentTiming(resolvePaymentTiming(paymentTiming));
         transportPayment.markPaid(proofUrl, paidAt);
         orderPort.setOrderPaid(orderId);
 
@@ -90,7 +94,8 @@ public class PaymentLifecycleService {
     public TransportPayment externalPay(
             Users currentUser,
             Long orderId,
-            PaymentMethod method
+            PaymentMethod method,
+            PaymentTiming paymentTiming
     ) {
         requireAuthenticated(currentUser);
         if (currentUser.getRole() != Role.SHIPPER) {
@@ -136,7 +141,8 @@ public class PaymentLifecycleService {
                         fee.feeRate(),
                         fee.feeAmount(),
                         fee.netAmount(),
-                        method
+                        method,
+                        resolvePaymentTiming(paymentTiming)
                 ));
 
         if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED
@@ -144,6 +150,7 @@ public class PaymentLifecycleService {
             return transportPayment;
         }
 
+        transportPayment.applyPaymentTiming(resolvePaymentTiming(paymentTiming));
         transportPayment.markPaid(result.transactionId(), LocalDateTime.now());
         transportPayment.setPgTid(result.transactionId());
         orderPort.setOrderPaid(orderId);
@@ -210,8 +217,11 @@ public class PaymentLifecycleService {
                         fee.feeRate(),
                         fee.feeAmount(),
                         fee.netAmount(),
-                        tx.getMethod()
+                        tx.getMethod(),
+                        resolveGatewayPaymentTiming(tx)
                 ));
+
+        payment.applyPaymentTiming(resolveGatewayPaymentTiming(tx));
 
         if (payment.getStatus() == TransportPaymentStatus.CANCELLED) {
             throw new IllegalStateException("cannot mark paid for cancelled payment");
@@ -299,6 +309,14 @@ public class PaymentLifecycleService {
                 TransportPaymentStatus.CONFIRMED,
                 TransportPaymentStatus.ADMIN_FORCE_CONFIRMED
         );
+    }
+
+    private PaymentTiming resolvePaymentTiming(PaymentTiming paymentTiming) {
+        return paymentTiming == null ? PaymentTiming.PREPAID : paymentTiming;
+    }
+
+    private PaymentTiming resolveGatewayPaymentTiming(PaymentGatewayTransaction tx) {
+        return PaymentTiming.POSTPAID;
     }
 }
 

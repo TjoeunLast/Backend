@@ -3,6 +3,7 @@ package com.example.project.domain.payment.service.core;
 import com.example.project.domain.payment.domain.PaymentDispute;
 import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentTiming;
 import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisputeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossConfirmRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossPrepareRequest;
@@ -26,18 +27,20 @@ public class TransportPaymentService {
             Users currentUser,
             Long orderId,
             PaymentMethod method,
+            PaymentTiming paymentTiming,
             String proofUrl,
             LocalDateTime paidAt
     ) {
-        return paymentLifecycleService.markPaid(currentUser, orderId, method, proofUrl, paidAt);
+        return paymentLifecycleService.markPaid(currentUser, orderId, method, paymentTiming, proofUrl, paidAt);
     }
 
     public TransportPayment externalPay(
             Users currentUser,
             Long orderId,
-            PaymentMethod method
+            PaymentMethod method,
+            PaymentTiming paymentTiming
     ) {
-        return paymentLifecycleService.externalPay(currentUser, orderId, method);
+        return paymentLifecycleService.externalPay(currentUser, orderId, method, paymentTiming);
     }
 
     public TransportPayment confirm(Users currentUser, Long orderId) {

@@ -2,6 +2,7 @@ package com.example.project.domain.payment.dto.paymentResponse;
 
 import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentTiming;
 import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
 import lombok.Builder;
 
@@ -19,6 +20,7 @@ public record TransportPaymentResponse(
         BigDecimal feeAmountSnapshot,
         BigDecimal netAmountSnapshot,
         PaymentMethod method,
+        PaymentTiming paymentTiming,
         TransportPaymentStatus status,
         String pgTid,
         String proofUrl,
@@ -36,6 +38,7 @@ public record TransportPaymentResponse(
                 .feeAmountSnapshot(p.getFeeAmountSnapshot())
                 .netAmountSnapshot(p.getNetAmountSnapshot())
                 .method(p.getMethod())
+                .paymentTiming(p.getPaymentTiming())
                 .status(p.getStatus())
                 .pgTid(p.getPgTid())
                 .proofUrl(p.getProofUrl())
