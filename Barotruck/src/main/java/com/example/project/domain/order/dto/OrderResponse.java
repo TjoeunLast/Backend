@@ -194,4 +194,48 @@ public class OrderResponse {
         }
     }
 
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PaymentSummary {
+        private Long paymentId;
+        private BigDecimal chargedAmount;
+        private BigDecimal receivedAmount;
+        private BigDecimal feeAmount;
+        private PaymentMethod method;
+        private TransportPaymentStatus status;
+        private LocalDateTime paidAt;
+        private LocalDateTime confirmedAt;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ProofSummary {
+        private Long proofId;
+        private String receiptImageUrl;
+        private String signatureImageUrl;
+        private String recipientName;
+        private LocalDateTime createdAt;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DisputeSummary {
+        private Long disputeId;
+        private Long requesterUserId;
+        private Long createdByUserId;
+        private PaymentDisputeReason reasonCode;
+        private String description;
+        private String attachmentUrl;
+        private PaymentDisputeStatus status;
+        private String adminMemo;
+        private LocalDateTime requestedAt;
+        private LocalDateTime processedAt;
+    }
+
 }
