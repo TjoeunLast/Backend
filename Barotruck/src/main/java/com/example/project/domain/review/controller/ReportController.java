@@ -1,6 +1,5 @@
 package com.example.project.domain.review.controller;
 
-
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -30,23 +29,37 @@ public class ReportController {
 
     private final ReportService reportService;
 
- // 1. 신고 접수 (DTO 사용)
+    // 1. 신고 접수 (DTO 사용)
     @PostMapping
     public ResponseEntity<Boolean> createReport(
             @RequestBody ReportRequestDto dto,
-            @AuthenticationPrincipal Users currentUser
-    ) {
+            @AuthenticationPrincipal Users currentUser) {
         reportService.createReport(dto, currentUser);
         return ResponseEntity.ok(true);
     }
 
-
-
     // 3. 상태별 신고 목록 조회 (ResponseDto 반환)
     @GetMapping("/status")
     public ResponseEntity<List<ReportResponseDto>> getReportsByStatus(
-    		@RequestParam("status") String status) {
+            @RequestParam("status") String status) {
         return ResponseEntity.ok(reportService.getReportsByStatus(status));
+    }
+
+    // 전체 신고 목록 조회 (관리자용, 최신순)
+    @GetMapping("/admin/all")
+    public ResponseEntity<List<ReportResponseDto>> getAllReports(
+            @AuthenticationPrincipal Users currentUser) {
+        if (currentUser.getRole() != Role.ADMIN) {
+            throw new IllegalStateException("관리자 권한이 필요합니다.");
+        }
+        return ResponseEntity.ok(reportService.getAllReports());
+    }
+
+    // 내가 신고한 목록 조회 (최신순)
+    @GetMapping("/my")
+    public ResponseEntity<List<ReportResponseDto>> getMyReports(
+            @AuthenticationPrincipal Users currentUser) {
+        return ResponseEntity.ok(reportService.getMyReports(currentUser));
     }
 
     // 2. 신고 상태 업데이트 (관리자)
@@ -54,46 +67,42 @@ public class ReportController {
     public ResponseEntity<Boolean> updateReportStatus(
             @PathVariable("reportId") Long reportId,
             @RequestParam("status") String status,
-            @AuthenticationPrincipal Users currentUser
-    ) {
-    	if(currentUser.getRole() != Role.ADMIN) {
-    	    return ResponseEntity.ok(false);
-    	}
+            @AuthenticationPrincipal Users currentUser) {
+        if (currentUser.getRole() != Role.ADMIN) {
+            return ResponseEntity.ok(false);
+        }
         reportService.updateReportStatus(reportId, status);
         return ResponseEntity.ok(true);
     }
-    
+
     @DeleteMapping("/admin/{reportId}")
     public ResponseEntity<Boolean> deleteReport(
-    		@PathVariable("reportId") Long reportId,
-            @AuthenticationPrincipal Users currentUser
-    		) {
-    	if(currentUser.getRole() != Role.ADMIN) {
-    	    return ResponseEntity.ok(false);
-    	}
+            @PathVariable("reportId") Long reportId,
+            @AuthenticationPrincipal Users currentUser) {
+        if (currentUser.getRole() != Role.ADMIN) {
+            return ResponseEntity.ok(false);
+        }
         reportService.deleteReport(reportId);
         return ResponseEntity.ok(true);
     }
-    
+
     // 2. 신고 상태 업데이트 (사용자)
     @PatchMapping("/my/{reportId}/status")
     public ResponseEntity<Boolean> updateMyReportStatus(
             @PathVariable("reportId") Long reportId,
             @RequestParam("status") String status,
-            @AuthenticationPrincipal Users currentUser
-    ) {
+            @AuthenticationPrincipal Users currentUser) {
         reportService.updateReportStatus(reportId, status, currentUser);
         return ResponseEntity.ok(true);
     }
-    
+
     // 사용자
     @DeleteMapping("/my/{reportId}")
     public ResponseEntity<Boolean> deleteMyReport(
-    		@PathVariable("reportId") Long reportId,
-            @AuthenticationPrincipal Users currentUser
-    		) {
+            @PathVariable("reportId") Long reportId,
+            @AuthenticationPrincipal Users currentUser) {
         reportService.deleteReport(reportId, currentUser);
         return ResponseEntity.ok(true);
     }
-    
+
 }

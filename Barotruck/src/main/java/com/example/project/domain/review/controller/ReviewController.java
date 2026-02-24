@@ -1,6 +1,5 @@
 package com.example.project.domain.review.controller;
 
-
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -29,7 +28,7 @@ public class ReviewController {
 
     private final ReviewService reviewService;
 
- // 1. 리뷰 등록 (DTO 사용)
+    // 1. 리뷰 등록 (DTO 사용)
     @PostMapping
     public ResponseEntity<Boolean> createReview(
             @RequestBody ReviewRequestDto dto,
@@ -42,8 +41,31 @@ public class ReviewController {
     // 2. 특정 대상의 리뷰 목록 조회 (ResponseDto 반환)
     @GetMapping("/target/{targetId}")
     public ResponseEntity<List<ReviewResponseDto>> getReviewsByTarget(
-    		@PathVariable("targetId") Long targetId) {
+            @PathVariable("targetId") Long targetId) {
         return ResponseEntity.ok(reviewService.getReviewsByTarget(targetId));
+    }
+
+    // 2-1. 리뷰 상세 조회 (특정 글 보기)
+    @GetMapping("/{reviewId}")
+    public ResponseEntity<ReviewResponseDto> getReview(@PathVariable("reviewId") Long reviewId) {
+        return ResponseEntity.ok(reviewService.getReview(reviewId));
+    }
+
+    // 전체 리뷰 조회 (관리자)
+    @GetMapping("/admin/all")
+    public ResponseEntity<List<ReviewResponseDto>> getAllReviews(
+            @AuthenticationPrincipal Users currentUser) {
+        if (currentUser.getRole() != Role.ADMIN) {
+            throw new IllegalStateException("관리자 권한이 필요합니다.");
+        }
+        return ResponseEntity.ok(reviewService.getAllReviews());
+    }
+
+    // 내가 쓴 리뷰 조회
+    @GetMapping("/my")
+    public ResponseEntity<List<ReviewResponseDto>> getMyReviews(
+            @AuthenticationPrincipal Users currentUser) {
+        return ResponseEntity.ok(reviewService.getMyReviews(currentUser));
     }
 
     // 3. 관리자 리뷰 수정
@@ -53,44 +75,42 @@ public class ReviewController {
             @RequestBody ReviewRequestDto dto, // 수정 시에도 DTO나 별도 필드 사용 가능
             @AuthenticationPrincipal Users currentUser // 보안: 세션에서 유저 정보 직접 획득
     ) {
-    	if(currentUser.getRole() != Role.ADMIN) {
-    	    return ResponseEntity.ok(false);
-    	}
-    	reviewService.updateReview(reviewId, dto.getRating(), dto.getContent());
+        if (currentUser.getRole() != Role.ADMIN) {
+            return ResponseEntity.ok(false);
+        }
+        reviewService.updateReview(reviewId, dto.getRating(), dto.getContent());
         return ResponseEntity.ok(true);
     }
 
     // 4. 관리자 리뷰 삭제
     @DeleteMapping("/admin/{reviewId}")
     public ResponseEntity<Boolean> deleteReview(
-    		@PathVariable("reviewId") Long reviewId,
+            @PathVariable("reviewId") Long reviewId,
             @AuthenticationPrincipal Users currentUser // 보안: 세션에서 유저 정보 직접 획득
-    		) {
-    	if(currentUser.getRole() != Role.ADMIN) {
-    	    return ResponseEntity.ok(false);
-    	}
+    ) {
+        if (currentUser.getRole() != Role.ADMIN) {
+            return ResponseEntity.ok(false);
+        }
         reviewService.deleteReview(reviewId);
         return ResponseEntity.ok(true);
     }
-    
- // 3-1. 사용자가 직접 본인의 리뷰 수정
+
+    // 3-1. 사용자가 직접 본인의 리뷰 수정
     @PutMapping("/my/{reviewId}")
     public ResponseEntity<Boolean> updateMyReview(
             @PathVariable("reviewId") Long reviewId,
             @RequestBody ReviewRequestDto dto,
-            @AuthenticationPrincipal Users currentUser
-    ) {
-    	reviewService.updateReview(reviewId, dto.getRating(), dto.getContent(), currentUser);
+            @AuthenticationPrincipal Users currentUser) {
+        reviewService.updateReview(reviewId, dto.getRating(), dto.getContent(), currentUser);
         return ResponseEntity.ok(true);
-    
+
     }
 
     // 4-1. 사용자가 직접 본인의 리뷰 삭제
     @DeleteMapping("/my/{reviewId}")
     public ResponseEntity<Boolean> deleteMyReview(
             @PathVariable("reviewId") Long reviewId,
-            @AuthenticationPrincipal Users currentUser
-    ) {
+            @AuthenticationPrincipal Users currentUser) {
         reviewService.deleteReview(reviewId, currentUser);
         return ResponseEntity.ok(true);
     }
