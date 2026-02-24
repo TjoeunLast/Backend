@@ -17,8 +17,10 @@ import com.example.project.domain.order.domain.embedded.OrderSnapshot;
 import com.example.project.domain.order.domain.orderEnum.OrderDrivingStatus;
 import com.example.project.domain.order.dto.MyRevenueResponse;
 import com.example.project.domain.order.dto.OrderRequest;
-import com.example.project.domain.order.dto.OrderResponse; // 추가
+import com.example.project.domain.order.dto.OrderResponse;
 import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.global.neighborhood.NeighborhoodService;
+import com.example.project.global.neighborhood.dto.NeighborhoodResponse;
 import com.example.project.member.domain.Driver;
 import com.example.project.member.domain.Users;
 import com.example.project.member.repository.DriverRepository;
@@ -32,10 +34,31 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final DriverRepository driverRepository; // 드라이버 정보 조회를 위한 레포지토리
+    private final NeighborhoodService neighborhoodService;
+
     /**
      * 1. 화주: 오더 생성 (C)
      */
     public OrderResponse createOrder(Users user, OrderRequest request) {
+        // 주소 기반 지역 코드 자동 배정
+        if (request.getStartAddr() != null) {
+            try {
+                NeighborhoodResponse nbh = neighborhoodService.resolveNeighborhood(request.getStartAddr());
+                request.setStartNbhId(nbh.getNeighborhoodId());
+            } catch (Exception e) {
+                // 파싱 실패나 DB에 없는 지역일 경우 로그만 남기고 진행 (null로 저장됨)
+                System.out.println("Start Address Neighborhood resolution failed: " + e.getMessage());
+            }
+        }
+        if (request.getEndAddr() != null) {
+            try {
+                NeighborhoodResponse nbh = neighborhoodService.resolveNeighborhood(request.getEndAddr());
+                request.setEndNbhId(nbh.getNeighborhoodId());
+            } catch (Exception e) {
+                System.out.println("End Address Neighborhood resolution failed: " + e.getMessage());
+            }
+        }
+
         // 엔티티 생성 로직을 엔티티 내부의 정적 메서드로 위임
         Order order = Order.createOrder(user, request);
 
@@ -53,14 +76,14 @@ public class OrderService {
         if (!"REQUESTED".equals(order.getStatus())) {
             throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다.");
         }
-        
+
         System.out.println("--------------------------------------");
         System.out.println(driverNo);
         System.out.println("--------------------------------------");
-        if(order.getSnapshot().isInstant()) {
-        	order.assignDriver(driverNo, "ACCEPTED");
-        }else {
-        	order.addToDriverList(driverNo);	
+        if (order.getSnapshot().isInstant()) {
+            order.assignDriver(driverNo, "ACCEPTED");
+        } else {
+            order.addToDriverList(driverNo);
         }
 
     }
@@ -71,7 +94,7 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderResponse> getAvailableOrders() {
         List<Order> orders = orderRepository.findByStatusOrderByCreatedAtDesc("REQUESTED");
-        
+
         return orders.stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
@@ -87,7 +110,6 @@ public class OrderService {
         return convertToResponse(order);
     }
 
-    
     /**
      * 관리자: 오더 강제 배차
      */
@@ -105,12 +127,10 @@ public class OrderService {
                 .paidReason(reason)
                 .allocated(LocalDateTime.now())
                 .build();
-        
+
         order.setAdminControl(control); // Order 내부의 편의 메서드 활용
         orderRepository.save(order);
     }
-
-
 
     /**
      * 관리자: 전체 오더 목록 조회 (페이징 처리를 권장하지만, 일단 리스트로 구현)
@@ -121,44 +141,45 @@ public class OrderService {
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
-    
 
-    
     /**
      * 오더 취소 공통 로직
      */
-    /* public void cancelOrder(Long orderId, String cancelReason, Users currentUser) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+    /*
+     * public void cancelOrder(Long orderId, String cancelReason, Users currentUser)
+     * {
+     * Order order = orderRepository.findById(orderId)
+     * .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+     * 
+     * String role = determineCancelRole(order, currentUser); // 취소 주체 판별
+     * 
+     * // 1. 상태별 취소 가능 여부 체크
+     * validateCancelCondition(order, role);
+     * 
+     * // 2. 오더 상태 업데이트
+     * String newStatus = "CANCELLED_BY_" + role;
+     * order.cancelOrder(newStatus); //
+     * 
+     * // 3. 취소 정보 생성 및 연관관계 설정
+     * CancellationInfo cancelInfo = CancellationInfo.builder()
+     * .order(order)
+     * .cancelReason(cancelReason)
+     * .cancelledAt(LocalDateTime.now())
+     * .cancelledBy(role)
+     * .build();
+     * 
+     * order.setCancellationInfo(cancelInfo); //
+     * orderRepository.save(order);
+     * }
+     */
 
-        String role = determineCancelRole(order, currentUser); // 취소 주체 판별
-        
-        // 1. 상태별 취소 가능 여부 체크
-        validateCancelCondition(order, role);
-
-        // 2. 오더 상태 업데이트
-        String newStatus = "CANCELLED_BY_" + role;
-        order.cancelOrder(newStatus); //
-        
-        // 3. 취소 정보 생성 및 연관관계 설정
-        CancellationInfo cancelInfo = CancellationInfo.builder()
-                .order(order)
-                .cancelReason(cancelReason)
-                .cancelledAt(LocalDateTime.now())
-                .cancelledBy(role)
-                .build();
-        
-        order.setCancellationInfo(cancelInfo); //
-        orderRepository.save(order);
-    } */
-    
     // 유림 수정
     public void cancelOrder(Long orderId, String cancelReason, Users currentUser) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
 
         String role = determineCancelRole(order, currentUser);
-        
+
         // 1. 상태별 취소 가능 여부 체크
         validateCancelCondition(order, role);
 
@@ -166,7 +187,7 @@ public class OrderService {
         if ("DRIVER".equals(role)) {
             // 차주가 취소한 경우: 다른 기사가 잡을 수 있게 초기화
             // 기존에 만들어둔 assignDriver 편의 메서드를 활용해 status를 REQUESTED로, driverNo를 null로 변경
-            order.assignDriver(null, "REQUESTED"); 
+            order.assignDriver(null, "REQUESTED");
         } else {
             // 화주나 관리자가 취소한 경우: 아예 종료 상태로 변경
             String newStatus = "CANCELLED_BY_" + role;
@@ -180,32 +201,36 @@ public class OrderService {
                 .cancelledAt(LocalDateTime.now())
                 .cancelledBy(role)
                 .build();
-        
+
         order.setCancellationInfo(cancelInfo);
         orderRepository.save(order);
     }
 
     private String determineCancelRole(Order order, Users user) {
-        if (user.getRole().name().equals("ADMIN")) return "ADMIN";
-        if (order.getUser().getUserId().equals(user.getUserId())) return "USER";
-        if (order.getDriverNo() != null && order.getDriverNo().equals(user.getUserId())) return "DRIVER";
+        if (user.getRole().name().equals("ADMIN"))
+            return "ADMIN";
+        if (order.getUser().getUserId().equals(user.getUserId()))
+            return "USER";
+        if (order.getDriverNo() != null && order.getDriverNo().equals(user.getUserId()))
+            return "DRIVER";
         throw new RuntimeException("취소 권한이 없습니다.");
     }
 
     private void validateCancelCondition(Order order, String role) {
-        if (role.equals("ADMIN")) return; // 관리자는 무조건 가능
-        
+        if (role.equals("ADMIN"))
+            return; // 관리자는 무조건 가능
+
         // 이미 완료된 오더는 취소 불가
         if ("COMPLETED".equals(order.getStatus())) {
             throw new RuntimeException("이미 완료된 오더는 취소할 수 없습니다.");
         }
-        
+
         // 운송 중(IN_TRANSIT)인 경우 일반 취소 불가 (관리자에게 문의해야 함)
         if ("IN_TRANSIT".equals(order.getStatus())) {
             throw new RuntimeException("운행 중인 오더는 직접 취소가 불가능합니다. 고객센터에 문의하세요.");
         }
     }
-    
+
     public OrderResponse updateStatus(Long orderId, String newStatus, Long driverNo) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주문입니다."));
@@ -220,26 +245,26 @@ public class OrderService {
 
         return OrderResponse.from(order);
     }
-    
+
     public List<OrderResponse> findMyDrivingOrders(Long driverId) {
         // 운행 중으로 간주되는 상태 리스트 정의
-    	List<String> drivingStatuses = List.of(
-    			"REQUESTED",    // 배차대기
-    			"APPLIED",     // 승인 대기
-                "ACCEPTED",   // 배차확정
-                "LOADING",    // 상차중
-                "IN_TRANSIT",  // 이동중
-                "UNLOADING",  // 하차중
-                "COMPLETED"    // 하차완료
-            );
+        List<String> drivingStatuses = List.of(
+                "REQUESTED", // 배차대기
+                "APPLIED", // 승인 대기
+                "ACCEPTED", // 배차확정
+                "LOADING", // 상차중
+                "IN_TRANSIT", // 이동중
+                "UNLOADING", // 하차중
+                "COMPLETED" // 하차완료
+        );
 
-    	// 리포지토리를 통해 해당 차주 ID와 상태 목록에 해당하는 오더 조회
+        // 리포지토리를 통해 해당 차주 ID와 상태 목록에 해당하는 오더 조회
         return orderRepository.findByDriverNoAndStatusIn(driverId, drivingStatuses)
                 .stream()
                 .map(OrderResponse::from) // 엔티티 -> DTO 변환
                 .collect(Collectors.toList());
     }
-    
+
     /**
      * 드라이버 맞춤형 추천 오더 목록 조회
      */
@@ -248,19 +273,51 @@ public class OrderService {
         Driver driver = driverRepository.findByUser_UserId(userId)
                 .orElseThrow(() -> new RuntimeException("드라이버 프로필을 찾을 수 없습니다."));
 
+        // 차주의 선호 지역 코드 사용 (없으면 null -> 전체 지역 조회)
+        Long nbhId = driver.getNbhId();
+
         // 2. 맞춤형 오더 조회
         // 주의: driver.getTonnage() 필드가 BigDecimal 타입인지 확인하세요.
         List<Order> recommendedOrders = orderRepository.findCustomOrders(
-                driver.getCarType(), 
-                driver.getTonnage() 
-        );
+                driver.getCarType(),
+                driver.getTonnage(),
+                nbhId);
 
         // 3. 응답 변환
         return recommendedOrders.stream()
                 .map(OrderResponse::from)
                 .collect(Collectors.toList());
     }
-    
+
+    /**
+     * 5. 차주: 지역 기반 오더 검색 (지역코드 OR 주소)
+     * nbhId가 있으면 우선 사용, 없으면 address를 파싱하여 지역 코드 추출 후 검색
+     */
+    @Transactional(readOnly = true)
+    public List<OrderResponse> searchOrders(Users user, Long nbhId, String address) {
+        Driver driver = driverRepository.findByUser_UserId(user.getUserId())
+                .orElseThrow(() -> new RuntimeException("드라이버 프로필을 찾을 수 없습니다."));
+
+        Long targetNbhId = nbhId;
+
+        // 지역코드가 없고 주소가 있다면 주소를 통해 지역코드 추출
+        if (targetNbhId == null && address != null && !address.isBlank()) {
+            try {
+                NeighborhoodResponse nbh = neighborhoodService.resolveNeighborhood(address);
+                targetNbhId = nbh.getNeighborhoodId();
+            } catch (Exception e) {
+                // 주소 파싱 실패 시 검색 결과 없음 처리 (빈 리스트 반환)
+                return new ArrayList<>();
+            }
+        }
+
+        // 기존의 맞춤형 오더 조회 쿼리 재사용 (차종/톤수 필터 + 지역 필터)
+        return orderRepository.findCustomOrders(driver.getCarType(), driver.getTonnage(), targetNbhId)
+                .stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public void selectDriver(Long orderId, Long selectedDriverNo, Long currentUserId) {
         Order order = orderRepository.findById(orderId)
@@ -279,12 +336,11 @@ public class OrderService {
         // 3. 선택한 기사가 신청자 명단에 있는지 확인 및 최종 확정
         // 아까 Order 엔티티에 만들었던 confirmDriver 편의 메서드 활용
         order.confirmDriver(selectedDriverNo);
-        
+
         // 4. 선택되지 않은 나머지 신청자 명단은 비워주기 (선택 사항)
         order.getDriverList().clear();
     }
-    
-    
+
     /**
      * 화주 전용: 본인이 생성한 오더 목록 조회
      */
@@ -296,17 +352,15 @@ public class OrderService {
                 .map(this::convertToResponse) // 기존에 작성된 DTO 변환 메서드 활용
                 .collect(Collectors.toList());
     }
-    
-    
 
- // OrderService.java에 추가
+    // OrderService.java에 추가
 
     public MyRevenueResponse getMyMonthlyRevenue(Long driverNo, Integer year, Integer month) {
         // 1. 기간 설정
         LocalDateTime now = LocalDateTime.now();
         int targetYear = (year != null) ? year : now.getYear();
         int targetMonth = (month != null) ? month : now.getMonthValue();
-        
+
         LocalDateTime start = LocalDateTime.of(targetYear, targetMonth, 1, 0, 0, 0);
         LocalDateTime end = start.with(TemporalAdjusters.lastDayOfMonth()).with(LocalTime.MAX);
 
@@ -315,11 +369,11 @@ public class OrderService {
         System.out.println("-----------------------");
         System.out.println(results);
         System.out.println("-----------------------");
-        
+
         long total = 0, received = 0, pending = 0;
 
         if (results != null && !results.isEmpty()) {
-            Object[] stats = results.get(0); 
+            Object[] stats = results.get(0);
             total = (stats[0] != null) ? ((Number) stats[0]).longValue() : 0L;
             received = (stats[1] != null) ? ((Number) stats[1]).longValue() : 0L;
             pending = (stats[2] != null) ? ((Number) stats[2]).longValue() : 0L;
@@ -339,20 +393,17 @@ public class OrderService {
                 .orders(orderList)
                 .build();
     }
-    
-    
+
     private OrderResponse convertToResponse(Order order) {
         // 1. Embedded 객체 추출
         OrderSnapshot snapshot = order.getSnapshot();
-        
+
         // snapshot이 null일 경우를 대비한 방어 로직 (정상적인 주문이라면 null일 리 없지만 안전을 위해)
         if (snapshot == null) {
             throw new IllegalStateException("주문 상세 정보(Snapshot)가 존재하지 않습니다.");
         }
-     // tag 리스트를 안전하게 복사하여 주입
-        List<String> tags = snapshot.getTag() != null ? 
-                            new ArrayList<>(snapshot.getTag()) : new ArrayList<>();
-        
+        // tag 리스트를 안전하게 복사하여 주입
+        List<String> tags = snapshot.getTag() != null ? new ArrayList<>(snapshot.getTag()) : new ArrayList<>();
 
         return OrderResponse.builder()
                 // 1. 주문 기본 정보 및 시스템 지표
@@ -363,7 +414,6 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
 
-                
                 .startLat(snapshot.getStartLat())
                 .startLng(snapshot.getStartLng())
                 // 2. 상차지 정보 (Snapshot에서 추출)
@@ -372,6 +422,7 @@ public class OrderService {
                 .startType(snapshot.getStartType())
                 .startSchedule(snapshot.getStartSchedule())
                 .puProvince(snapshot.getPuProvince())
+                .startNbhId(snapshot.getStartNbhId())
 
                 // 3. 하차지 정보 (Snapshot에서 추출)
                 .endAddr(snapshot.getEndAddr())
@@ -379,6 +430,7 @@ public class OrderService {
                 .endType(snapshot.getEndType())
                 .endSchedule(snapshot.getEndSchedule())
                 .doProvince(snapshot.getDoProvince())
+                .endNbhId(snapshot.getEndNbhId())
 
                 // 4. 화물 및 작업 정보 (Snapshot에서 추출)
                 .cargoContent(snapshot.getCargoContent())
@@ -405,7 +457,5 @@ public class OrderService {
                 .user(OrderResponse.UserSummary.from(order.getUser()))
                 .build();
     }
-
-
 
 }

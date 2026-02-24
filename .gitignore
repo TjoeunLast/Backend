@@ -105,3 +105,4 @@ Refrigerator/.http
 Barotruck/src/main/resources/firebase/refrigerator-4ade3-firebase-adminsdk-fbsvc-5cb5b08064.json
 Barotruck/src/main/resources/data.sql
 META-INF/MANIFEST.MF
+Barotruck/src/main/resources/firebase-service-account.json

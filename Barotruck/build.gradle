@@ -78,8 +78,6 @@ dependencies {
 	// WebSocket & STOMP 메시징을 위한 핵심 라이브러리
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     // JSON 데이터 처리를 위한 Jackson (이미 포함되어 있을 확률이 높음)
-	// 8. 알림을 위한 firebase 설정
-	implementation 'com.google.firebase:firebase-admin:9.2.0'
 	
     // 다양한 조건을 만족시키는 쿼리를 만들기 위한 라이브러리 
 	// 9. Querydsl 라이브러리
@@ -98,6 +96,10 @@ dependencies {
     testImplementation 'io.findify:s3mock_2.13:0.2.6'
     
     implementation 'net.nurigo:sdk:4.3.0'
+
+    // 12. Firebase Admin SDK (FCM 알림을 위한 라이브러리)
+    implementation 'com.google.firebase:firebase-admin:9.2.0'
+
 
 
 }

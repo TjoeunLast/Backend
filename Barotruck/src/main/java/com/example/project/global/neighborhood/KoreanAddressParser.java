@@ -3,18 +3,39 @@ package com.example.project.global.neighborhood;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 public class KoreanAddressParser {
-    private KoreanAddressParser() {}
+    private KoreanAddressParser() {
+    }
 
     private static final Pattern PAREN = Pattern.compile("\\(.*?\\)");
 
     // “시/도” 레벨의 ‘시’들은 최소셋으로만 하드코딩 (수원시 같은 건 시/도 아님)
     private static final Set<String> METRO_SI_SET = Set.of(
-            "서울특별시","부산광역시","대구광역시","인천광역시","광주광역시",
-            "대전광역시","울산광역시","세종특별자치시"
-    );
+            "서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시",
+            "대전광역시", "울산광역시", "세종특별자치시");
+
+    // Daum API 등에서 넘어오는 단축명을 DB의 정식 명칭으로 매핑
+    private static final Map<String, String> SHORT_NAME_MAP = Map.ofEntries(
+            Map.entry("서울", "서울특별시"),
+            Map.entry("부산", "부산광역시"),
+            Map.entry("대구", "대구광역시"),
+            Map.entry("인천", "인천광역시"),
+            Map.entry("광주", "광주광역시"),
+            Map.entry("대전", "대전광역시"),
+            Map.entry("울산", "울산광역시"),
+            Map.entry("세종", "세종특별자치시"),
+            Map.entry("경기", "경기도"),
+            Map.entry("강원", "강원도"),
+            Map.entry("충북", "충청북도"),
+            Map.entry("충남", "충청남도"),
+            Map.entry("전북", "전라북도"),
+            Map.entry("전남", "전라남도"),
+            Map.entry("경북", "경상북도"),
+            Map.entry("경남", "경상남도"),
+            Map.entry("제주", "제주특별자치도"));
 
     public static ParsedAddress parse(String fullAddress) {
         if (fullAddress == null || fullAddress.isBlank()) {
@@ -22,10 +43,12 @@ public class KoreanAddressParser {
         }
 
         List<String> tokens = tokenize(fullAddress);
-        if (tokens.isEmpty()) return new ParsedAddress(null, null);
+        if (tokens.isEmpty())
+            return new ParsedAddress(null, null);
 
         String cityName = resolveCityName(tokens);
-        if (cityName == null) return new ParsedAddress(null, null);
+        if (cityName == null)
+            return new ParsedAddress(null, null);
 
         // ✅ 세종 정책: DB가 displayName="세종시"로 고정이면 파서도 고정
         if ("세종특별자치시".equals(cityName)) {
@@ -43,25 +66,33 @@ public class KoreanAddressParser {
                 .replace(",", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
-        if (normalized.isEmpty()) return List.of();
+        if (normalized.isEmpty())
+            return List.of();
         return Arrays.asList(normalized.split(" "));
     }
 
     private static String resolveCityName(List<String> tokens) {
         String t0 = tokens.get(0);
 
+        // 0) 단축명 매핑 확인 (서울 -> 서울특별시)
+        if (SHORT_NAME_MAP.containsKey(t0))
+            return SHORT_NAME_MAP.get(t0);
+
         // 1) 광역시/특별시/세종 같은 “시/도 레벨 시”
-        if (METRO_SI_SET.contains(t0)) return t0;
+        if (METRO_SI_SET.contains(t0))
+            return t0;
 
         // 2) “도”는 규칙으로 시/도 확정 가능 (경기도, 충청남도 등)
-        if (t0.endsWith("도")) return t0;
+        if (t0.endsWith("도"))
+            return t0;
 
         // 3) 그 외(예: "수원시 ..."로 시작)는 여기선 시/도 추출 실패로 처리
         return null;
     }
 
     private static String resolveDisplayName(List<String> tokens, String cityName) {
-        if (tokens.size() < 2) return null;
+        if (tokens.size() < 2)
+            return null;
 
         // 세종: DB 정책 고정
         if ("세종특별자치시".equals(cityName)) {
@@ -72,12 +103,14 @@ public class KoreanAddressParser {
 
         // 도: displayName은 "시" 또는 "군"만 허용 (구는 절대 안씀)
         if (cityName.endsWith("도")) {
-            if (t1.endsWith("시") || t1.endsWith("군")) return t1;
+            if (t1.endsWith("시") || t1.endsWith("군"))
+                return t1;
             return null;
         }
 
         // 특별시/광역시: displayName은 "구"가 보통, 예외로 "군/시"도 허용
-        if (t1.endsWith("구") || t1.endsWith("군") || t1.endsWith("시")) return t1;
+        if (t1.endsWith("구") || t1.endsWith("군") || t1.endsWith("시"))
+            return t1;
 
         return null;
     }

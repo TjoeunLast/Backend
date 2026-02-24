@@ -32,7 +32,7 @@ public class Driver {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "DRIVER_ID")
-    private Long driverId; // 
+    private Long driverId; //
 
     @Column(name = "CAR_NUM", length = 20)
     private String carNum; // 차 번호
@@ -67,5 +67,8 @@ public class Driver {
     @JoinColumn(name = "USER_ID", nullable = true)
     private Users user;
 
+    // 차주가 선호하는 지역 코드와 주소
+    private Long nbhId;
+    private String address;
 
 }
