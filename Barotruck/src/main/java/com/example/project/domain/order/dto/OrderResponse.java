@@ -6,6 +6,10 @@ import java.util.List;
 
 import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.domain.embedded.OrderSnapshot;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeReason;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
 import com.example.project.global.image.ImageInfo;
 import com.example.project.security.user.Role;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -80,6 +84,9 @@ public class OrderResponse {
 
     private UserSummary user;
     private CancellationSummary cancellation;
+    private PaymentSummary paymentSummary;
+    private ProofSummary proofSummary;
+    private DisputeSummary disputeSummary;
 
     public static OrderResponse from(Order order) {
         OrderSnapshot s = order.getSnapshot();

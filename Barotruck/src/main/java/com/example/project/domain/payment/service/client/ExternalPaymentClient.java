@@ -1,6 +1,6 @@
-package com.example.project.domain.payment.service;
+package com.example.project.domain.payment.service.client;
 
-import com.example.project.domain.payment.domain.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
 
 public interface ExternalPaymentClient {
     ExternalPayResult pay(String merchantOrderId, long amount, PaymentMethod method);
@@ -11,3 +11,5 @@ public interface ExternalPaymentClient {
             String failReason
     ) {}
 }
+
+

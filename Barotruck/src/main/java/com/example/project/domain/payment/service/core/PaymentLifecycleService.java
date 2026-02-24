@@ -1,12 +1,14 @@
-package com.example.project.domain.payment.service;
+package com.example.project.domain.payment.service.core;
 
 import com.example.project.domain.order.domain.Order;
-import com.example.project.domain.payment.domain.PaymentMethod;
+import com.example.project.domain.payment.domain.PaymentGatewayTransaction;
 import com.example.project.domain.payment.domain.TransportPayment;
-import com.example.project.domain.payment.domain.TransportPaymentStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
 import com.example.project.domain.payment.port.OrderPort;
 import com.example.project.domain.payment.port.UserPort;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
+import com.example.project.domain.payment.service.client.ExternalPaymentClient;
 import com.example.project.domain.settlement.domain.Settlement;
 import com.example.project.domain.settlement.repository.SettlementRepository;
 import com.example.project.member.domain.Users;
@@ -22,23 +24,16 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class TransportPaymentService {
+public class PaymentLifecycleService {
 
     private final ExternalPaymentClient externalPaymentClient;
-
     private final TransportPaymentRepository transportPaymentRepository;
     private final OrderPort orderPort;
     private final UserPort userPort;
     private final FeePolicyService feePolicyService;
-
     private final SettlementRepository settlementRepository;
     private final EntityManager entityManager;
 
-    /*
-     * 기존(수기/입금증 등) 결제 처리
-     * - 금액은 OrderSnapshot.amount() 기준
-     * - 결제완료 시 Settlement를 생성/업데이트하면서 totalPrice를 grossAmount로 세팅함
-     */
     @Transactional
     public TransportPayment markPaid(
             Users currentUser,
@@ -47,18 +42,17 @@ public class TransportPaymentService {
             String proofUrl,
             LocalDateTime paidAt
     ) {
+        requireAuthenticated(currentUser);
         if (currentUser.getRole() != Role.SHIPPER) {
             throw new IllegalStateException("only shipper can mark paid");
         }
 
         OrderPort.OrderSnapshot snap = orderPort.getRequiredSnapshot(orderId);
-
         Long userLevel = userPort.getRequiredUser(snap.shipperUserId()).userLevel();
-
         boolean firstPaymentPromoEligible =
                 transportPaymentRepository.countByShipperUserIdAndStatusIn(
                         snap.shipperUserId(),
-                        List.of(TransportPaymentStatus.PAID, TransportPaymentStatus.CONFIRMED)
+                        paidOrConfirmedStatuses()
                 ) == 0;
 
         FeePolicyService.FeeResult fee = feePolicyService.calculate(
@@ -79,7 +73,8 @@ public class TransportPaymentService {
                         method
                 ));
 
-        if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED) {
+        if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED
+                || transportPayment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED) {
             return transportPayment;
         }
 
@@ -87,29 +82,21 @@ public class TransportPaymentService {
         orderPort.setOrderPaid(orderId);
 
         TransportPayment saved = transportPaymentRepository.save(transportPayment);
-
-        // Settlement 생성/업데이트 (totalPrice를 grossAmount로 세팅)
-        upsertSettlementOnPaid(orderId, currentUser, snap.amount(), fee);
-
+        upsertSettlementOnPaid(orderId, snap.shipperUserId(), snap.amount(), fee);
         return saved;
     }
 
-    /*
-     * 외부 결제 처리 (TOTAL_PRICE 기반)
-     * - 금액은 Settlement.totalPrice(TOTAL_PRICE)를 소스 오브 트루스로 사용
-     * - 결제 성공 시 TransportPayment를 PAID로 변경하고, Settlement의 totalPrice는 덮어쓰지 않음
-     */
     @Transactional
     public TransportPayment externalPay(
             Users currentUser,
             Long orderId,
             PaymentMethod method
     ) {
+        requireAuthenticated(currentUser);
         if (currentUser.getRole() != Role.SHIPPER) {
             throw new IllegalStateException("only shipper can pay");
         }
 
-        // 1) TOTAL_PRICE 조회 (외부 결제 금액)
         Settlement settlement = settlementRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new IllegalStateException("settlement not found. orderId=" + orderId));
 
@@ -119,8 +106,6 @@ public class TransportPaymentService {
         }
 
         BigDecimal totalPrice = BigDecimal.valueOf(totalPriceLong);
-
-        // 2) 외부 결제 요청
         ExternalPaymentClient.ExternalPayResult result =
                 externalPaymentClient.pay("ORDER-" + orderId, totalPriceLong, method);
 
@@ -128,14 +113,12 @@ public class TransportPaymentService {
             throw new IllegalStateException("external payment failed: " + result.failReason());
         }
 
-        // 3) 수수료 계산 (TOTAL_PRICE 기준)
         OrderPort.OrderSnapshot snap = orderPort.getRequiredSnapshot(orderId);
         Long userLevel = userPort.getRequiredUser(snap.shipperUserId()).userLevel();
-
         boolean firstPaymentPromoEligible =
                 transportPaymentRepository.countByShipperUserIdAndStatusIn(
                         snap.shipperUserId(),
-                        List.of(TransportPaymentStatus.PAID, TransportPaymentStatus.CONFIRMED)
+                        paidOrConfirmedStatuses()
                 ) == 0;
 
         FeePolicyService.FeeResult fee = feePolicyService.calculate(
@@ -144,7 +127,6 @@ public class TransportPaymentService {
                 firstPaymentPromoEligible
         );
 
-        // 4) TransportPayment 생성/갱신 (금액은 TOTAL_PRICE)
         TransportPayment transportPayment = transportPaymentRepository.findByOrderId(orderId)
                 .orElseGet(() -> TransportPayment.ready(
                         orderId,
@@ -157,130 +139,125 @@ public class TransportPaymentService {
                         method
                 ));
 
-        if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED) {
+        if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED
+                || transportPayment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED) {
             return transportPayment;
         }
 
-        // proofUrl 파라미터가 없는 흐름이라, transactionId를 proofUrl 자리에 넣어서 추적(임시)
         transportPayment.markPaid(result.transactionId(), LocalDateTime.now());
+        transportPayment.setPgTid(result.transactionId());
         orderPort.setOrderPaid(orderId);
 
         TransportPayment saved = transportPaymentRepository.save(transportPayment);
-
-        // 5) Settlement는 totalPrice는 유지하고 상태/일시만 보정
         touchSettlementOnPaid(settlement);
-
         return saved;
     }
 
     @Transactional
-    public TransportPayment confirm(Users currentUser, Long orderId) {
-        TransportPayment transportPayment = transportPaymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("transport payment not found. orderId=" + orderId));
+    public TransportPayment confirmByDriver(Users currentUser, Long orderId) {
+        requireAuthenticated(currentUser);
         if (currentUser.getRole() != Role.DRIVER) {
             throw new IllegalStateException("only driver can confirm");
         }
 
-        if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED) {
-            return transportPayment;
-        }
+        TransportPayment payment = transportPaymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("transport payment not found. orderId=" + orderId));
 
-        if (transportPayment.getStatus() != TransportPaymentStatus.PAID) {
+        if (payment.getStatus() == TransportPaymentStatus.CONFIRMED
+                || payment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED) {
+            return payment;
+        }
+        if (payment.getStatus() != TransportPaymentStatus.PAID) {
             throw new IllegalStateException("payment must be PAID before confirm");
         }
 
-        transportPayment.confirm(LocalDateTime.now());
+        payment.confirm(LocalDateTime.now());
         orderPort.setOrderConfirmed(orderId);
 
-        TransportPayment saved = transportPaymentRepository.save(transportPayment);
-
-        // 정산 완료 처리
+        TransportPayment saved = transportPaymentRepository.save(payment);
         completeSettlementOnConfirm(orderId);
-
         return saved;
     }
 
-    /*
-     * 분쟁 처리 (dispute)
-     * - PaymentController에 이미 /dispute 가 있으므로 반드시 존재해야 함
-     * - 화주/차주 둘 다 가능하게 열어두고, 최소 상태 체크만 둠
-     */
     @Transactional
-    public TransportPayment dispute(Users currentUser, Long orderId) {
-        TransportPayment transportPayment = transportPaymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("transport payment not found. orderId=" + orderId));
-
-        // 권한: shipper 또는 driver만
-        if (currentUser.getRole() != Role.SHIPPER && currentUser.getRole() != Role.DRIVER) {
-            throw new IllegalStateException("only shipper/driver can dispute");
+    public TransportPayment applyPaidFromGatewayTx(PaymentGatewayTransaction tx) {
+        OrderPort.OrderSnapshot snap = orderPort.getRequiredSnapshot(tx.getOrderId());
+        if (snap.driverUserId() == null) {
+            throw new IllegalStateException("assigned driver not found");
+        }
+        if (snap.shipperUserId() == null || !snap.shipperUserId().equals(tx.getShipperUserId())) {
+            throw new IllegalStateException("gateway transaction shipper mismatch");
         }
 
-        // 본인 주문인지 최소 검증(보수적으로)
-        if (currentUser.getRole() == Role.SHIPPER && !currentUser.getUserId().equals(transportPayment.getShipperUserId())) {
-            throw new IllegalStateException("not your payment (shipper)");
+        Long userLevel = userPort.getRequiredUser(snap.shipperUserId()).userLevel();
+        boolean firstPaymentPromoEligible =
+                transportPaymentRepository.countByShipperUserIdAndStatusIn(
+                        snap.shipperUserId(),
+                        paidOrConfirmedStatuses()
+                ) == 0;
+        FeePolicyService.FeeResult fee = feePolicyService.calculate(
+                tx.getAmount(),
+                userLevel,
+                firstPaymentPromoEligible
+        );
+
+        TransportPayment payment = transportPaymentRepository.findByOrderId(tx.getOrderId())
+                .orElseGet(() -> TransportPayment.ready(
+                        tx.getOrderId(),
+                        snap.shipperUserId(),
+                        snap.driverUserId(),
+                        tx.getAmount(),
+                        fee.feeRate(),
+                        fee.feeAmount(),
+                        fee.netAmount(),
+                        tx.getMethod()
+                ));
+
+        if (payment.getStatus() == TransportPaymentStatus.CANCELLED) {
+            throw new IllegalStateException("cannot mark paid for cancelled payment");
         }
-        if (currentUser.getRole() == Role.DRIVER && !currentUser.getUserId().equals(transportPayment.getDriverUserId())) {
-            throw new IllegalStateException("not your payment (driver)");
+        if (payment.getStatus() == TransportPaymentStatus.PAID
+                || payment.getStatus() == TransportPaymentStatus.CONFIRMED
+                || payment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED
+                || payment.getStatus() == TransportPaymentStatus.DISPUTED
+                || payment.getStatus() == TransportPaymentStatus.ADMIN_HOLD
+                || payment.getStatus() == TransportPaymentStatus.ADMIN_REJECTED) {
+            return payment;
         }
 
-        // 분쟁 가능한 상태 제한
-        if (transportPayment.getStatus() == TransportPaymentStatus.CANCELLED) {
-            throw new IllegalStateException("cannot dispute cancelled payment");
-        }
-        if (transportPayment.getStatus() == TransportPaymentStatus.READY) {
-            throw new IllegalStateException("cannot dispute before paid");
-        }
+        String pgReference = firstNonBlank(tx.getTransactionId(), tx.getPaymentKey(), tx.getPgOrderId());
+        payment.markPaid(pgReference, LocalDateTime.now());
+        payment.setPgTid(pgReference);
+        orderPort.setOrderPaid(tx.getOrderId());
 
-        if (transportPayment.getStatus() == TransportPaymentStatus.DISPUTED) {
-            return transportPayment;
-        }
-
-        transportPayment.dispute();
-        orderPort.setOrderDisputed(orderId);
-
-        TransportPayment saved = transportPaymentRepository.save(transportPayment);
-
-        // settlement도 분쟁 상태로 표시(STATUS 컬럼이 String이라 확장 가능)
-        settlementRepository.findByOrderId(orderId).ifPresent(s -> {
-            s.setStatus("DISPUTED");
-            settlementRepository.save(s);
-        });
-
+        TransportPayment saved = transportPaymentRepository.save(payment);
+        upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), tx.getAmount(), fee);
         return saved;
     }
 
-    private void upsertSettlementOnPaid(Long orderId, Users shipper, BigDecimal grossAmount, FeePolicyService.FeeResult fee) {
-        // 할인 아직 없으면 0으로 저장
-        long levelDiscount = 0L;
-        long couponDiscount = 0L;
-
-        // 최종 결제금액(할인 반영). 할인 없으면 gross 그대로.
-        long totalPrice = grossAmount.longValue(); // scale이 .00이라 longValue()로 충분
-
-        // feeRate: 0.05 -> 5
+    private void upsertSettlementOnPaid(Long orderId, Long shipperUserId, BigDecimal grossAmount, FeePolicyService.FeeResult fee) {
+        long totalPrice = grossAmount.longValue();
         long feeRatePercent = fee.feeRate().multiply(new BigDecimal("100")).longValue();
 
         Settlement settlement = settlementRepository.findByOrderId(orderId)
                 .orElseGet(() -> {
                     Order orderRef = entityManager.getReference(Order.class, orderId);
-                    Users userRef = entityManager.getReference(Users.class, shipper.getUserId());
+                    Users userRef = entityManager.getReference(Users.class, shipperUserId);
                     return Settlement.builder()
                             .order(orderRef)
                             .user(userRef)
                             .build();
                 });
 
-        settlement.setLevelDiscount(levelDiscount);
-        settlement.setCouponDiscount(couponDiscount);
+        settlement.setLevelDiscount(0L);
+        settlement.setCouponDiscount(0L);
         settlement.setTotalPrice(totalPrice);
         settlement.setFeeRate(feeRatePercent);
         settlement.setStatus("READY");
         settlement.setFeeDate(LocalDateTime.now());
-
         settlementRepository.save(settlement);
     }
 
-    // externalPay에서는 TOTAL_PRICE를 덮어쓰지 않고, 상태/일시만 갱신
     private void touchSettlementOnPaid(Settlement settlement) {
         if (settlement.getFeeDate() == null) {
             settlement.setFeeDate(LocalDateTime.now());
@@ -295,7 +272,33 @@ public class TransportPaymentService {
 
         settlement.setStatus("COMPLETED");
         settlement.setFeeCompleteDate(LocalDateTime.now());
-
         settlementRepository.save(settlement);
     }
+
+    private void requireAuthenticated(Users currentUser) {
+        if (currentUser == null || currentUser.getUserId() == null) {
+            throw new IllegalStateException("authentication required");
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private List<TransportPaymentStatus> paidOrConfirmedStatuses() {
+        return List.of(
+                TransportPaymentStatus.PAID,
+                TransportPaymentStatus.CONFIRMED,
+                TransportPaymentStatus.ADMIN_FORCE_CONFIRMED
+        );
+    }
 }
+
