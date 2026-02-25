@@ -16,23 +16,24 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class RegisterRequest {
 
-	// 기존 firstname, lastname 삭제 -> nickname으로 통합
-	  private String nickname;
-	  private String email;
-	  private String password;
-      private String phone;
-      @Enumerated(EnumType.STRING) // DB에 숫자가 아닌 "SHIPPER" 문자열로 저장됨
-      @NotNull
-      private Role role; // "SHIPPER" 또는 "DRIVER"
-	  
-	  // 새로 추가된 필드들 (DB 스키마 반영)
-	  private String gender; // M or F
-	  private Integer age;
-	  
-	  // dto
-	  private ShipperDto shipper;
-	  private DriverDto driver;
+    // 기존 firstname, lastname 삭제 -> nickname으로 통합
+    private String nickname;
+    private String email;
+    private String password;
+    private String phone;
+    @Enumerated(EnumType.STRING) // DB에 숫자가 아닌 "SHIPPER" 문자열로 저장됨
+    @NotNull
+    private Role role; // "SHIPPER" 또는 "DRIVER"
+
+    // 새로 추가된 필드들 (DB 스키마 반영)
+    private String gender; // M or F
+    private Integer age;
+
+    // dto
+    private ShipperDto shipper;
+    private DriverDto driver;
 }
+
 @Data
 class ShipperDto {
     private String companyName;
@@ -48,4 +49,5 @@ class DriverDto {
     private Long tonnage;
     private String bankName;
     private String accountNum;
+    private String address;
 }
