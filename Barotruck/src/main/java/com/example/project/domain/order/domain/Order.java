@@ -1,5 +1,6 @@
 package com.example.project.domain.order.domain;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -69,10 +70,10 @@ public class Order {
     private OrderSnapshot snapshot;
     // 1. 거리 및 소요 시간 (물리적 지표)
     @Column(name = "DISTANCE")
-    private Long distance; // 거리 (Field6)
+    private BigDecimal distance; // 거리 (Field6)
 
     @Column(name = "DURATION")
-    private Long duration; // 소요시간 (Field7)
+    private BigDecimal duration; // 소요시간 (Field7)
 
     // 상태 및 시간
     @Column(name = "STATUS", length = 30)
