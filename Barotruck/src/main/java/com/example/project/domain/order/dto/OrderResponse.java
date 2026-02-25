@@ -79,8 +79,8 @@ public class OrderResponse {
     private Long endNbhId;
 
     // 시스템 지표
-    private Long distance;
-    private Long duration;
+    private BigDecimal distance;
+    private BigDecimal duration;
 
     private UserSummary user;
     private CancellationSummary cancellation;

@@ -1,5 +1,7 @@
 package com.example.project.domain.order.dto.orderResponse;
 
+import java.math.BigDecimal;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -12,7 +14,7 @@ public class OrderListResponse {
     private String startPlace;
     private String endPlace;
 
-    private Long distance;
+    private BigDecimal distance;
     private Long totalPrice;
 
     // 바꿈: LocalDateTime -> String
