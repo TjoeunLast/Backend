@@ -25,6 +25,7 @@ import com.example.project.domain.chat.dto.MemberRole;
 import com.example.project.domain.chat.repository.ChatMessageRepository;
 import com.example.project.domain.chat.repository.ChatRoomMemberRepository;
 import com.example.project.domain.chat.repository.ChatRoomRepository;
+import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.member.domain.Users;
 import com.example.project.member.repository.UsersRepository;
 
@@ -39,48 +40,48 @@ public class ChatService {
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final UsersRepository usersRepository;
-
-    
+    private final NotificationService notificationService; // [추가]
 
     // 내 채팅방 목록 조회
-//    public List<ChatRoomResponse> getMyRooms(Long userId) {
-//        return chatRoomMemberRepository.findAllByUserUserId(userId).stream()
-//                .map(ChatRoomResponse::from) // ChatRoomResponse.from(ChatRoomMember) 호출
-//                .collect(Collectors.toList());
-//    }
+    // public List<ChatRoomResponse> getMyRooms(Long userId) {
+    // return chatRoomMemberRepository.findAllByUserUserId(userId).stream()
+    // .map(ChatRoomResponse::from) // ChatRoomResponse.from(ChatRoomMember) 호출
+    // .collect(Collectors.toList());
+    // }
 
     public List<ChatRoomResponse> getMyRooms(Long userId) {
         return chatRoomMemberRepository.findAllByUserUserId(userId).stream()
                 .map(member -> {
                     // 1. 해당 방의 최신 메시지 조회
                     ChatMessage lastMessage = chatMessageRepository
-                        .findFirstByRoomRoomIdOrderByCreatedAtDesc(member.getRoom().getRoomId())
-                        .orElse(null);
+                            .findFirstByRoomRoomIdOrderByCreatedAtDesc(member.getRoom().getRoomId())
+                            .orElse(null);
 
                     // 2. static 메서드를 통해 DTO 변환
                     return ChatRoomResponse.of(member, lastMessage);
                 })
                 // 3. 최신 메시지 시간 순으로 정렬 (최신순)
-                .sorted(Comparator.comparing(ChatRoomResponse::getLastMessageTime, Comparator.nullsLast(Comparator.reverseOrder())))
+                .sorted(Comparator.comparing(ChatRoomResponse::getLastMessageTime,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
     }
-    
-    
+
     // 방 상세 조회 및 읽음 처리
     @Transactional
     public ChatRoomDetailResponse getRoomDetail(Long roomId, Long userId) {
         // 1. 방 존재 여부 확인
         ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new RuntimeException(ChatErrorCode.ROOM_NOT_FOUND.getMessage()));
-        
+
         // 2. 참여 권한 확인 (가장 중요!)
         ChatRoomMember member = chatRoomMemberRepository.findByRoomRoomIdAndUserUserId(roomId, userId)
                 .orElseThrow(() -> new RuntimeException(ChatErrorCode.ACCESS_DENIED.getMessage()));
 
         // 3. 읽음 시간 갱신
-        member.updateLastRead(); 
+        member.updateLastRead();
 
-        List<ChatMessageResponse> history = chatMessageRepository.findAllByRoomRoomIdOrderByCreatedAtAsc(roomId).stream()
+        List<ChatMessageResponse> history = chatMessageRepository.findAllByRoomRoomIdOrderByCreatedAtAsc(roomId)
+                .stream()
                 .map(ChatMessageResponse::fromEntity)
                 .collect(Collectors.toList());
 
@@ -101,6 +102,21 @@ public class ChatService {
                 .build();
         chatMessageRepository.save(message);
 
+        // [추가] 채팅방의 다른 참여자들에게 알림 발송
+        // 1. 방 멤버 전체 조회 (Repository에 findAllByRoomRoomId 메서드가 있다고 가정하거나 JPA 쿼리 메서드 활용)
+        List<ChatRoomMember> members = chatRoomMemberRepository.findAllByRoomRoomId(room.getRoomId());
+
+        // 2. 나(Sender)를 제외한 멤버에게 알림 전송
+        for (ChatRoomMember member : members) {
+            if (!member.getUser().getUserId().equals(sender.getUserId())) {
+                String title = sender.getNickname(); // 보낸 사람 이름
+                // 이미지는 URL 대신 텍스트로 대체
+                String body = "IMAGE".equals(request.getType()) ? "사진을 보냈습니다." : request.getContent();
+
+                notificationService.sendNotification(member.getUser(), "CHAT", title, body, room.getRoomId());
+            }
+        }
+
         return ChatMessageResponse.fromEntity(message);
     }
 
@@ -108,19 +124,19 @@ public class ChatService {
     @Transactional
     public void leaveRoom(Long roomId, Long userId) {
         chatRoomMemberRepository.deleteByRoomRoomIdAndUserUserId(roomId, userId);
-        
+
         // 만약 방에 남은 인원이 없다면 방 삭제 로직 추가 가능
         if (!chatRoomMemberRepository.existsByRoomRoomId(roomId)) {
             chatRoomRepository.deleteById(roomId);
         }
     }
-    
+
     /**
      * 채팅방 입장 및 대화 이력 조회
      */
     @Transactional // 읽음 시간 업데이트(Dirty Checking)를 위해 Transactional 필요
     public ChatHistoryResponse getChatHistory(Long roomId, Long userId, Pageable pageable) {
-        
+
         // 1. 해당 방에 참여 중인 유저인지 권한 확인
         ChatRoomMember member = chatRoomMemberRepository.findByRoomRoomIdAndUserUserId(roomId, userId)
                 .orElseThrow(() -> new RuntimeException("해당 채팅방에 접근 권한이 없습니다."));
@@ -137,9 +153,7 @@ public class ChatService {
         // 4. DTO 변환 및 반환
         return ChatHistoryResponse.of(roomId, messageSlice);
     }
-    
-    
-    
+
     /**
      * 특정 채팅방의 과거 메시지 전체 조회
      */
@@ -153,26 +167,5 @@ public class ChatService {
                 .map(ChatMessageResponse::fromEntity)
                 .toList();
     }
-    
-    
-//    @Transactional
-//    public Long createGroupBuyChatRoom(Long userId, Long postId) {
-//        Users creator = usersRepository.findById(userId).orElseThrow();
-//        GroupBuyPost post = postRepository.findById(postId).orElseThrow();
-//
-//        ChatRoom chatRoom = ChatRoom.builder()
-//                .type(ChatRoomType.GROUP_BUY)
-//                .post(post)
-//                .roomName("[공구] " + post.getTitle())
-//                .build();
-//        chatRoomRepository.save(chatRoom);
-//
-//        chatRoomMemberRepository.save(ChatRoomMember.builder()
-//                .user(creator)
-//                .room(chatRoom)
-//                .role(MemberRole.OWNER)
-//                .build());
-//
-//        return chatRoom.getRoomId();
-//    }
+
 }

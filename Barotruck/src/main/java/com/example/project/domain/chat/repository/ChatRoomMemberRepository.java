@@ -54,6 +54,8 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
            "AND m2.user.userId = :userId2 " +
            "AND m1.room.type = 'PERSONAL'")
     Optional<Long> findPersonalRoomBetweenUsers(@Param("userId1") Long userId1, @Param("userId2") Long userId2);
+
+	List<ChatRoomMember> findAllByRoomRoomId(Long roomId);
 	
 	
     // 기존에 에러를 유발하던 deleteByRoomIdAndUserId 등 잘못된 메서드는 삭제했습니다.
