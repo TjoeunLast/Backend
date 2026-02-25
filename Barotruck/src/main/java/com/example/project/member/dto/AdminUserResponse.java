@@ -11,7 +11,7 @@ import lombok.*;
 @Getter
 @AllArgsConstructor
 public class AdminUserResponse {
-
+	private Long userId; // ✅ userId 추가
     private String role;
     private String nickname;
     private String phone;
@@ -20,6 +20,7 @@ public class AdminUserResponse {
 
     public static AdminUserResponse from(Users user) {
         return new AdminUserResponse(
+        		user.getUserId(), // ✅ 생성자에 userId 매핑 추가
                 user.getRole() != null ? user.getRole().name() : null,
                 user.getNickname(),
                 user.getPhone(),
