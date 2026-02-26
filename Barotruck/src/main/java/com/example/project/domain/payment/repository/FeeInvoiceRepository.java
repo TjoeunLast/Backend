@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface FeeInvoiceRepository extends JpaRepository<FeeInvoice, Long> {
+    Optional<FeeInvoice> findTopByOrderByInvoiceIdDesc();
 
     Optional<FeeInvoice> findByShipperUserIdAndPeriod(Long shipperUserId, String period);
 

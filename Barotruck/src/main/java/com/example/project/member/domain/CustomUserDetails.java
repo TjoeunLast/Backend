@@ -42,7 +42,10 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        return List.of(
+            new SimpleGrantedAuthority("ROLE_" + role.name()),
+            new SimpleGrantedAuthority(role.name())
+        );
     }
 
     // 계정 상태 체크 (기본 보안 설정)

@@ -21,6 +21,8 @@ public interface UsersRepository extends JpaRepository<Users, Long>{
 
 	public List<Users> findAllByRole(Role role, Sort sort);
 
+	Optional<Users> findTopByRoleOrderByUserIdDesc(Role role);
+
 	Optional<Users> findByNameAndPhone(String name, String phone);
 
 

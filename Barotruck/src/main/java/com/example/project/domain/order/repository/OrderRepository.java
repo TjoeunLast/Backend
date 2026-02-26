@@ -18,6 +18,7 @@ import com.example.project.member.domain.Users;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
+       Optional<Order> findTopByOrderByOrderIdDesc();
        // 화주: 자신이 올린 요청 목록 조회
        List<Order> findByUserOrderByCreatedAtDesc(Users user);
 

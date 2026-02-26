@@ -8,6 +8,7 @@ import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentSta
 import com.example.project.domain.payment.repository.DriverPayoutItemRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.payment.service.client.DriverPayoutGatewayClient;
+import com.example.project.domain.settlement.repository.SettlementRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -26,6 +28,7 @@ public class DriverPayoutService {
     private final DriverPayoutItemRepository itemRepository;
     private final TransportPaymentRepository transportPaymentRepository;
     private final DriverPayoutGatewayClient payoutGatewayClient;
+    private final SettlementRepository settlementRepository;
     private final EntityManager entityManager;
 
     @Scheduled(cron = "${payment.payout.cron:0 0 4 * * *}")
@@ -95,6 +98,7 @@ public class DriverPayoutService {
         );
         if (result.success()) {
             item.markCompleted(result.payoutRef());
+            markSettlementCompletedOnPayout(item.getOrderId());
             log.info("driver payout completed. orderId={}, itemId={}", item.getOrderId(), item.getItemId());
         } else {
             item.markFailed(result.failReason());
@@ -113,6 +117,16 @@ public class DriverPayoutService {
                 .setMaxResults(1)
                 .getResultList();
         return result.isEmpty() ? null : result.get(0);
+    }
+
+    private void markSettlementCompletedOnPayout(Long orderId) {
+        settlementRepository.findByOrderId(orderId).ifPresentOrElse(settlement -> {
+            settlement.setStatus("COMPLETED");
+            if (settlement.getFeeCompleteDate() == null) {
+                settlement.setFeeCompleteDate(LocalDateTime.now());
+            }
+            settlementRepository.save(settlement);
+        }, () -> log.warn("payout completed but settlement not found. orderId={}", orderId));
     }
 }
 
