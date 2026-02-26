@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin Payment API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; color: #111827; }
+        .wrap { max-width: 1100px; margin: 24px auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; }
+        h1 { margin: 0 0 12px; font-size: 24px; }
+        h2 { margin: 20px 0 10px; font-size: 18px; }
+        .hint { margin-bottom: 12px; font-size: 13px; color: #4b5563; }
+        .row { display: grid; grid-template-columns: 220px 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
+        label { font-size: 14px; color: #374151; }
+        input, textarea, select, button { font-size: 14px; }
+        input, textarea, select {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 8px;
+        }
+        textarea { min-height: 72px; resize: vertical; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        button {
+            border: 0;
+            border-radius: 6px;
+            background: #0f766e;
+            color: #fff;
+            padding: 9px 14px;
+            cursor: pointer;
+        }
+        button.secondary { background: #374151; }
+        button.warn { background: #b45309; }
+        .box {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #fafafa;
+            padding: 12px;
+            overflow: auto;
+        }
+        .mono { font-family: Consolas, monospace; }
+        pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>관리자 결제 API 테스트 페이지</h1>
+    <div class="hint">
+        페이지 URL: <span id="pageUrl" class="mono"></span><br>
+        이 페이지는 admin 토큰으로 <code>/api/admin/payment/**</code> API를 호출합니다.
+    </div>
+
+    <h2>기본 입력</h2>
+    <div class="row">
+        <label>Base URL</label>
+        <input id="baseUrl" class="mono" readonly>
+    </div>
+    <div class="row">
+        <label for="adminToken">Admin Token</label>
+        <textarea id="adminToken" class="mono" placeholder="Bearer 제외 access token"></textarea>
+    </div>
+    <div class="actions">
+        <button type="button" class="secondary" onclick="saveInputs()">입력 저장</button>
+    </div>
+
+    <h2>Dispute API</h2>
+    <div class="row">
+        <label for="orderId">Order ID</label>
+        <input id="orderId" class="mono" placeholder="예: 91">
+    </div>
+    <div class="row">
+        <label for="disputeId">Dispute ID</label>
+        <input id="disputeId" class="mono" placeholder="예: 2">
+    </div>
+    <div class="row">
+        <label for="requesterUserId">Requester User ID</label>
+        <input id="requesterUserId" class="mono" placeholder="예: 103 (배정된 차주)">
+    </div>
+    <div class="row">
+        <label for="reasonCode">Reason Code</label>
+        <select id="reasonCode">
+            <option value="PRICE_MISMATCH">PRICE_MISMATCH</option>
+            <option value="RECEIVED_AMOUNT_MISMATCH">RECEIVED_AMOUNT_MISMATCH</option>
+            <option value="PROOF_MISSING">PROOF_MISSING</option>
+            <option value="FRAUD_SUSPECTED">FRAUD_SUSPECTED</option>
+            <option value="OTHER">OTHER</option>
+        </select>
+    </div>
+    <div class="row">
+        <label for="disputeDescription">Description</label>
+        <input id="disputeDescription" value="admin test dispute">
+    </div>
+    <div class="row">
+        <label for="attachmentUrl">Attachment URL</label>
+        <input id="attachmentUrl" value="https://example.com/dispute.png">
+    </div>
+    <div class="row">
+        <label for="disputeStatus">Dispute Status</label>
+        <select id="disputeStatus">
+            <option value="ADMIN_HOLD">ADMIN_HOLD</option>
+            <option value="ADMIN_FORCE_CONFIRMED">ADMIN_FORCE_CONFIRMED</option>
+            <option value="ADMIN_REJECTED">ADMIN_REJECTED</option>
+            <option value="PENDING">PENDING</option>
+        </select>
+    </div>
+    <div class="row">
+        <label for="adminMemo">Admin Memo</label>
+        <input id="adminMemo" value="admin status update">
+    </div>
+    <div class="actions">
+        <button type="button" onclick="createDispute()">POST /orders/{orderId}/disputes</button>
+        <button type="button" onclick="updateDisputeStatus()">PATCH /orders/{orderId}/disputes/{disputeId}/status</button>
+    </div>
+
+    <h2>Settlement/Payout API</h2>
+    <div class="row">
+        <label for="period">Period (YYYY-MM)</label>
+        <input id="period" class="mono" value="2026-02">
+    </div>
+    <div class="row">
+        <label for="shipperUserId">Shipper User ID</label>
+        <input id="shipperUserId" class="mono" placeholder="예: 102">
+    </div>
+    <div class="row">
+        <label for="payoutDate">Payout Date (YYYY-MM-DD)</label>
+        <input id="payoutDate" class="mono" value="2026-02-23">
+    </div>
+    <div class="row">
+        <label for="itemId">Payout Item ID</label>
+        <input id="itemId" class="mono" placeholder="예: 1">
+    </div>
+    <div class="actions">
+        <button type="button" onclick="runFeeInvoiceBatch()">POST /fee-invoices/run</button>
+        <button type="button" onclick="generateFeeInvoice()">POST /fee-invoices/generate</button>
+        <button type="button" onclick="runPayoutBatch()">POST /payouts/run</button>
+        <button type="button" onclick="retryPayoutItem()">POST /payout-items/{itemId}/retry</button>
+    </div>
+
+    <h2>Toss Retry/Reconciliation API</h2>
+    <div class="actions">
+        <button type="button" class="warn" onclick="runExpirePrepared()">POST /toss/expire-prepared/run</button>
+        <button type="button" class="warn" onclick="runRetryQueue()">POST /toss/retries/run</button>
+        <button type="button" class="warn" onclick="runReconciliation()">POST /reconciliation/run</button>
+    </div>
+
+    <h2>로그</h2>
+    <div class="box mono"><pre id="log">ready</pre></div>
+</div>
+
+<script>
+    const LS_KEY = "admin_payment_test_inputs_v1";
+
+    function log(message, payload) {
+        const el = document.getElementById("log");
+        const line = "[" + new Date().toISOString() + "] " + message;
+        if (payload === undefined) {
+            el.textContent += "\n" + line;
+            return;
+        }
+        let pretty;
+        try {
+            pretty = JSON.stringify(payload, null, 2);
+        } catch (e) {
+            pretty = String(payload);
+        }
+        el.textContent += "\n" + line + "\n" + pretty;
+    }
+
+    function baseUrl() {
+        return window.location.origin;
+    }
+
+    function getInput(id) {
+        const el = document.getElementById(id);
+        return el ? el.value.trim() : "";
+    }
+
+    function setInput(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+    }
+
+    function getToken() {
+        return getInput("adminToken");
+    }
+
+    function saveInputs() {
+        const state = {
+            adminToken: getInput("adminToken"),
+            orderId: getInput("orderId"),
+            disputeId: getInput("disputeId"),
+            requesterUserId: getInput("requesterUserId"),
+            reasonCode: getInput("reasonCode"),
+            disputeDescription: getInput("disputeDescription"),
+            attachmentUrl: getInput("attachmentUrl"),
+            disputeStatus: getInput("disputeStatus"),
+            adminMemo: getInput("adminMemo"),
+            period: getInput("period"),
+            shipperUserId: getInput("shipperUserId"),
+            payoutDate: getInput("payoutDate"),
+            itemId: getInput("itemId")
+        };
+        localStorage.setItem(LS_KEY, JSON.stringify(state));
+        log("inputs saved");
+    }
+
+    function loadInputs() {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return;
+        try {
+            const s = JSON.parse(raw);
+            for (const [k, v] of Object.entries(s)) {
+                setInput(k, v || "");
+            }
+        } catch (e) {
+            log("loadInputs parse error", String(e));
+        }
+    }
+
+    async function readResponseBody(res) {
+        const text = await res.text();
+        if (!text) return {};
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            return { raw: text };
+        }
+    }
+
+    async function callApi(method, path, body) {
+        const token = getToken();
+        if (!token) {
+            alert("admin token is required");
+            return;
+        }
+        saveInputs();
+
+        const url = baseUrl() + path;
+        const headers = { "Authorization": "Bearer " + token };
+        if (body !== undefined) {
+            headers["Content-Type"] = "application/json";
+        }
+
+        log("request", { method, url, body: body === undefined ? null : body });
+        const res = await fetch(url, {
+            method,
+            headers,
+            body: body === undefined ? undefined : JSON.stringify(body)
+        });
+        const responseBody = await readResponseBody(res);
+        log("response", { status: res.status, body: responseBody });
+    }
+
+    function createDispute() {
+        const orderId = getInput("orderId");
+        if (!orderId) return alert("orderId is required");
+        const requesterUserId = Number(getInput("requesterUserId"));
+        if (!requesterUserId) return alert("requesterUserId is required");
+        const body = {
+            requesterUserId: requesterUserId,
+            reasonCode: getInput("reasonCode") || "PRICE_MISMATCH",
+            description: getInput("disputeDescription") || "admin test dispute",
+            attachmentUrl: getInput("attachmentUrl") || "https://example.com/dispute.png"
+        };
+        callApi("POST", "/api/admin/payment/orders/" + orderId + "/disputes", body);
+    }
+
+    function updateDisputeStatus() {
+        const orderId = getInput("orderId");
+        const disputeId = getInput("disputeId");
+        if (!orderId || !disputeId) return alert("orderId and disputeId are required");
+        const body = {
+            status: getInput("disputeStatus") || "ADMIN_HOLD",
+            adminMemo: getInput("adminMemo") || "admin status update"
+        };
+        callApi("PATCH", "/api/admin/payment/orders/" + orderId + "/disputes/" + disputeId + "/status", body);
+    }
+
+    function runFeeInvoiceBatch() {
+        const period = getInput("period");
+        if (!period) return alert("period is required");
+        callApi("POST", "/api/admin/payment/fee-invoices/run?period=" + encodeURIComponent(period));
+    }
+
+    function generateFeeInvoice() {
+        const shipperUserId = getInput("shipperUserId");
+        const period = getInput("period");
+        if (!shipperUserId || !period) return alert("shipperUserId and period are required");
+        const path = "/api/admin/payment/fee-invoices/generate?shipperUserId="
+                + encodeURIComponent(shipperUserId) + "&period=" + encodeURIComponent(period);
+        callApi("POST", path);
+    }
+
+    function runPayoutBatch() {
+        const date = getInput("payoutDate");
+        if (!date) return alert("payoutDate is required");
+        callApi("POST", "/api/admin/payment/payouts/run?date=" + encodeURIComponent(date));
+    }
+
+    function retryPayoutItem() {
+        const itemId = getInput("itemId");
+        if (!itemId) return alert("itemId is required");
+        callApi("POST", "/api/admin/payment/payout-items/" + encodeURIComponent(itemId) + "/retry");
+    }
+
+    function runExpirePrepared() {
+        callApi("POST", "/api/admin/payment/toss/expire-prepared/run");
+    }
+
+    function runRetryQueue() {
+        callApi("POST", "/api/admin/payment/toss/retries/run");
+    }
+
+    function runReconciliation() {
+        callApi("POST", "/api/admin/payment/reconciliation/run");
+    }
+
+    (function init() {
+        setInput("baseUrl", baseUrl());
+        document.getElementById("pageUrl").textContent = window.location.href;
+        loadInputs();
+        log("page initialized", { url: window.location.href });
+    })();
+</script>
+</body>
+</html>

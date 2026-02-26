@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>결제 API 테스트</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; color: #111827; }
+        .wrap { max-width: 1080px; margin: 24px auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; }
+        h1 { margin: 0 0 12px; font-size: 24px; }
+        h2 { margin: 20px 0 10px; font-size: 18px; }
+        .hint { margin-bottom: 12px; color: #4b5563; font-size: 13px; }
+        .row { display: grid; grid-template-columns: 240px 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
+        label { font-size: 14px; color: #374151; }
+        input, textarea, select, button { font-size: 14px; }
+        input, textarea, select {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 8px;
+        }
+        textarea { min-height: 82px; resize: vertical; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        button {
+            border: 0;
+            border-radius: 6px;
+            background: #0f766e;
+            color: #fff;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        button.secondary { background: #374151; }
+        button.warn { background: #b45309; }
+        button.blue { background: #1d4ed8; }
+        .box {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #fafafa;
+            padding: 12px;
+            overflow: auto;
+        }
+        pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+        .mono { font-family: Consolas, monospace; }
+        .token-hint {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: #eef2ff;
+            color: #3730a3;
+            font-size: 12px;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>결제 API 테스트</h1>
+    <div class="hint">
+        0번은 주문 1건 생성+배차+운송완료입니다. 1단계부터 시작은 <b>결제 단계만</b> 세팅합니다.  
+        따라서 0번 누른 뒤 1단계를 눌러도 주문이 추가 생성되지 않습니다.
+    </div>
+
+    <h2>토큰</h2>
+    <div class="row">
+        <label>Base URL</label>
+        <input id="baseUrl" class="mono" readonly>
+    </div>
+    <div class="row">
+        <label for="shipperToken">화주 토큰 (SHIPPER)</label>
+        <textarea id="shipperToken" class="mono" placeholder="shipper access token"></textarea>
+    </div>
+    <div class="row">
+        <label for="driverToken">차주 토큰 (DRIVER)</label>
+        <textarea id="driverToken" class="mono" placeholder="driver access token"></textarea>
+    </div>
+    <div class="row">
+        <label for="adminToken">관리자 토큰 (ADMIN)</label>
+        <textarea id="adminToken" class="mono" placeholder="admin access token"></textarea>
+    </div>
+
+    <h2>테스트 값</h2>
+    <div class="row"><label for="orderId">orderId</label><input id="orderId" class="mono"></div>
+    <div class="row"><label for="disputeId">disputeId</label><input id="disputeId" class="mono"></div>
+    <div class="row"><label for="invoiceId">invoiceId</label><input id="invoiceId" class="mono"></div>
+    <div class="row"><label for="shipperId">shipperUserId</label><input id="shipperId" class="mono"></div>
+    <div class="row"><label for="itemId">payout itemId</label><input id="itemId" class="mono"></div>
+    <div class="row"><label for="driverUserId">driverUserId</label><input id="driverUserId" class="mono"></div>
+    <div class="row"><label for="clientKey">toss clientKey</label><input id="clientKey" class="mono" placeholder="test_ck_..."></div>
+    <div class="row"><label for="paymentKey">paymentKey</label><input id="paymentKey" class="mono" placeholder="비우면 clientKey 자동 사용"></div>
+    <div class="row"><label for="pgOrderId">pgOrderId</label><input id="pgOrderId" class="mono"></div>
+    <div class="row"><label for="amount">amount</label><input id="amount" class="mono" value="55000"></div>
+
+    <h2>실행 버튼</h2>
+    <div class="actions">
+        <button type="button" class="blue" onclick="autoBootstrapOrderFlow()">0) 주문 생성/배차/운송완료</button>
+        <button type="button" class="secondary" onclick="startScenario()">1단계부터 시작(결제만)</button>
+        <button type="button" class="secondary" onclick="repeatScenarioStep()">현재 단계 다시 세팅</button>
+        <button type="button" onclick="nextScenarioStep()">다음 단계 세팅</button>
+        <button type="button" class="secondary" onclick="loadContextForCurrentOrder()">orderId 기준 컨텍스트 동기화</button>
+        <button type="button" class="secondary" onclick="saveState()">입력 저장</button>
+    </div>
+    <div class="box mono"><pre id="scenarioStatus">시나리오 대기중</pre></div>
+
+    <h2>요청 설정</h2>
+    <div class="row">
+        <label for="method">HTTP Method</label>
+        <select id="method">
+            <option>GET</option>
+            <option selected>POST</option>
+            <option>PATCH</option>
+            <option>PUT</option>
+            <option>DELETE</option>
+        </select>
+    </div>
+    <div class="row">
+        <label for="path">Path</label>
+        <div>
+            <input id="path" class="mono" value="/api/v1/payments/orders/&lt;ORDER_ID&gt;/toss/prepare">
+            <span id="tokenHint" class="token-hint">자동 토큰: SHIPPER</span>
+            <span id="resolvedPathHint" class="token-hint">치환 path: /api/v1/payments/orders/1/toss/prepare</span>
+        </div>
+    </div>
+    <div class="row">
+        <label for="body">JSON Body</label>
+        <textarea id="body" class="mono">{
+  "method": "CARD",
+  "payChannel": "APP_CARD",
+  "successUrl": "barotruck://pay/success",
+  "failUrl": "barotruck://pay/fail"
+}</textarea>
+    </div>
+    <div class="actions">
+        <button type="button" onclick="sendRequest()">요청 보내기</button>
+        <button type="button" class="warn" onclick="clearLogs()">로그 지우기</button>
+    </div>
+
+    <h2>응답</h2>
+    <div class="box mono"><pre id="response">none</pre></div>
+
+    <h2>로그</h2>
+    <div class="box mono"><pre id="log">ready</pre></div>
+</div>
+
+<script src="/api/v1/payments/api-test-config.js" defer></script>
+<script src="/api/v1/payments/api-test.js" defer></script>
+</body>
+</html>

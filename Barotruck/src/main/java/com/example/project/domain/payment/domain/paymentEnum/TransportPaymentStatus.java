@@ -5,7 +5,7 @@ public enum TransportPaymentStatus {
     READY,
     // 화주 결제 완료 상태
     PAID,
-    // 차주가 결제를 확인한 상태
+    // 결제를 확인한 상태
     CONFIRMED,
     // 결제 이의제기 접수 상태
     DISPUTED,

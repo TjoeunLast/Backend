@@ -91,7 +91,7 @@ public class JpaOrderPort implements OrderPort {
                 .orElseThrow(() -> new IllegalArgumentException("order not found: " + orderId));
 
         // 도메인 메서드를 통해 상태 변경
-        order.changeStatus("PAID");
+        updateStatusForPaymentFlow(order, "PAID");
     }
 
 
@@ -104,7 +104,7 @@ public class JpaOrderPort implements OrderPort {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("order not found: " + orderId));
 
-        order.changeStatus("CONFIRMED");
+        updateStatusForPaymentFlow(order, "CONFIRMED");
     }
 
 
@@ -117,14 +117,21 @@ public class JpaOrderPort implements OrderPort {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("order not found: " + orderId));
 
-        order.changeStatus("DISPUTED");
+        updateStatusForPaymentFlow(order, "DISPUTED");
     }
 
-
     /**
-     * 금액 null 방지용 유틸
-     * null이면 0 반환
+     * 결제 단계에서는 운송 완료(COMPLETED) 이후에도 결제 상태로 전이해야 한다.
+     * COMPLETED 에서는 changeStatus 가드를 우회해 상태를 반영한다.
      */
+    private void updateStatusForPaymentFlow(Order order, String status) {
+        if ("COMPLETED".equals(order.getStatus())) {
+            order.assignDriver(order.getDriverNo(), status);
+            return;
+        }
+        order.changeStatus(status);
+    }
+
     private long nullSafe(Long value) {
         return value == null ? 0L : value;
     }

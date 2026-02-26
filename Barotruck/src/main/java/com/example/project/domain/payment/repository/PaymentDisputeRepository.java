@@ -7,5 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.example.project.domain.payment.domain.PaymentDispute;
 
 public interface PaymentDisputeRepository extends JpaRepository<PaymentDispute, Long> {
+    Optional<PaymentDispute> findTopByOrderByDisputeIdDesc();
     Optional<PaymentDispute> findByOrderId(Long orderId);
 }

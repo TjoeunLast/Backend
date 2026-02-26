@@ -46,8 +46,8 @@ public class PaymentDisputeService {
     @Transactional
     public PaymentDispute createDispute(Users currentUser, Long orderId, CreatePaymentDisputeRequest request) {
         requireAuthenticated(currentUser);
-        if (currentUser.getRole() != Role.ADMIN) {
-            throw new IllegalStateException("only admin can create dispute");
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.DRIVER) {
+            throw new IllegalStateException("only driver/admin can create dispute");
         }
         if (request == null) {
             throw new IllegalArgumentException("request is required");
