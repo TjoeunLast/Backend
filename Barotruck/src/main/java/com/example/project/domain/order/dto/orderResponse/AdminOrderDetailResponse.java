@@ -59,8 +59,8 @@ public class AdminOrderDetailResponse {
     private String memo;
     private List<String> tag;
 
-    private Long distance;
-    private Long duration;
+    private BigDecimal distance;
+    private BigDecimal duration;
 
     private CancellationSummary cancellation;
 

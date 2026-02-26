@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.order.domain.AdminControl;
 import com.example.project.domain.order.domain.CancellationInfo;
 import com.example.project.domain.order.domain.Order;
@@ -35,6 +36,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final DriverRepository driverRepository; // 드라이버 정보 조회를 위한 레포지토리
     private final NeighborhoodService neighborhoodService;
+    private final NotificationService notificationService; // [추가] 알림 서비스 주입
 
     /**
      * 1. 화주: 오더 생성 (C)
@@ -76,12 +78,21 @@ public class OrderService {
         if (!"REQUESTED".equals(order.getStatus())) {
             throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다.");
         }
+        
+        if(order.getDriverList().contains(driverNo)) {
+            throw new RuntimeException("이미 신청한 오더입니다.");
+        }
 
-        System.out.println("--------------------------------------");
-        System.out.println(driverNo);
-        System.out.println("--------------------------------------");
         if (order.getSnapshot().isInstant()) {
             order.assignDriver(driverNo, "ACCEPTED");
+            // [추가] 오더에 배차 완료 알림 발송 (화주에게)
+            notificationService.sendNotification(
+                    order.getUser(), // 화주(Shipper)
+                    "ORDER",
+                    "배차 완료",
+                    String.format("기사님이 배차되었습니다. (차량번호: %s)",
+                            driverRepository.findById(driverNo).map(Driver::getCarNum).orElse("정보 없음")),
+                    order.getOrderId());
         } else {
             order.addToDriverList(driverNo);
         }
@@ -245,10 +256,34 @@ public class OrderService {
             throw new IllegalStateException("해당 주문의 담당 기사가 아닙니다.");
         }
 
+        // [알림 발송]
+        String statusMessage = convertStatusToMessage(newStatus); // 상태별 메시지 변환 메서드 활용 권장
+
+        notificationService.sendNotification(
+                order.getUser(),
+                "ORDER",
+                "주문 상태 변경",
+                "주문 상태가 '" + statusMessage + "'(으)로 변경되었습니다.",
+                order.getOrderId());
+
         // 도메인 엔티티에 상태 변경 로직 위임
         order.changeStatus(newStatus);
 
         return OrderResponse.from(order);
+    }
+
+    // (참고) 상태 메시지 변환 헬퍼
+    private String convertStatusToMessage(String status) {
+        switch (status) {
+            case "LOADING":
+                return "상차 중";
+            case "MOVING":
+                return "이동 중";
+            case "COMPLETE":
+                return "배송 완료";
+            default:
+                return status;
+        }
     }
 
     public List<OrderResponse> findMyDrivingOrders(Long driverId) {

@@ -56,6 +56,6 @@ public class OrderRequest {
     private List<String> tag;
 
     // --- [시스템 계산 지표: 지도 API 연동 결과] ---
-    private Long distance; // 예상 주행 거리 (단위: 미터 또는 킬로미터)
-    private Long duration; // 예상 소요 시간 (단위: 초 또는 분)
+    private BigDecimal distance; // 예상 주행 거리 (단위: 미터 또는 킬로미터)
+    private BigDecimal duration; // 예상 소요 시간 (단위: 초 또는 분)
 }

@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.project.security.auth.dto.FindEmailRequest;
+import com.example.project.security.auth.dto.PasswordResetRequest;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -87,5 +90,21 @@ public class AuthenticationController {
      );
    }
  }
+ 
+ 
+//7. 이메일 찾기
+ @PostMapping("/find-email")
+ public ResponseEntity<String> findEmail(@RequestBody FindEmailRequest request) {
+     String email = service.findEmailByNameAndPhone(request.getName(), request.getPhone());
+     return ResponseEntity.ok(email);
+ }
+
+ // 8. 비밀번호 재설정
+ @PostMapping("/reset-password")
+ public ResponseEntity<Void> resetPassword(@RequestBody PasswordResetRequest request) {
+     service.resetPassword(request);
+     return ResponseEntity.ok().build();
+ }
+ 
 
 }

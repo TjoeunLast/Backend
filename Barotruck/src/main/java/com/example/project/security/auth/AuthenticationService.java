@@ -9,14 +9,19 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import com.example.project.global.email.EmailAuthService;
+import com.example.project.global.neighborhood.NeighborhoodService;
+import com.example.project.global.neighborhood.dto.NeighborhoodResponse;
 import com.example.project.member.domain.Driver;
 import com.example.project.member.domain.Shipper;
 import com.example.project.member.domain.Users;
 import com.example.project.member.repository.DriverRepository;
 import com.example.project.member.repository.ShipperRepository;
 import com.example.project.member.repository.UsersRepository;
+import com.example.project.security.auth.dto.PasswordResetRequest;
 import com.example.project.security.config.JwtService;
 import com.example.project.security.token.Token;
 import com.example.project.security.token.TokenRepository;
@@ -39,12 +44,16 @@ public class AuthenticationService {
 	private final RestTemplate restTemplate; // RestTemplate을 빈으로 주입받아 사용
 	private final ShipperRepository shipperRepository;
 	private final DriverRepository driversRepository;
+	private final NeighborhoodService neighborhoodService; // 추가
+	private final EmailAuthService emailAuthService; // 기존에 만든 이메일 서비스 활용
+	
+	
 	/**
 	 * 회원가입 처리
 	 */
 	public AuthenticationResponse register(RegisterRequest request) {
 
-		if(request.getRole() == Role.ADMIN) {
+		if (request.getRole() == Role.ADMIN) {
 			return null;
 		}
 		// 회원 엔티티 생성
@@ -57,29 +66,39 @@ public class AuthenticationService {
 				.phone(request.getPhone())
 				.role(request.getRole())
 				.build();
-		
-		// 2. DTO가 존재하는 쪽을 선택하여 저장
-	    if (request.getShipper() != null) {
-	        ShipperDto sDto = request.getShipper();
-	        Shipper shipper = Shipper.builder()
-	                .companyName(sDto.getCompanyName())
-	                .bizRegNum(sDto.getBizRegNum())
-	                .user(user)
-	                .build();
-	        user.setShipper(shipper);
-	    } 
-	    else if (request.getDriver() != null) {
-	        DriverDto dDto = request.getDriver();
-	        Driver driver = Driver.builder()
-	                .carNum(dDto.getCarNum())
-	                .carType(dDto.getCarType())
-	                .user(user)
-	                .build();
-	        user.setDriver(driver);
-	    }
-		
-		
 
+		// 2. DTO가 존재하는 쪽을 선택하여 저장
+		if (request.getShipper() != null) {
+			ShipperDto sDto = request.getShipper();
+			Shipper shipper = Shipper.builder()
+					.companyName(sDto.getCompanyName())
+					.bizRegNum(sDto.getBizRegNum())
+					.user(user)
+					.build();
+			user.setShipper(shipper);
+		} else if (request.getDriver() != null) {
+			DriverDto dDto = request.getDriver();
+
+			// 주소 기반 지역 코드 변환 로직 추가
+			Long nbhId = null;
+			if (dDto.getAddress() != null && !dDto.getAddress().isBlank()) {
+				try {
+					NeighborhoodResponse nbh = neighborhoodService.resolveNeighborhood(dDto.getAddress());
+					nbhId = nbh.getNeighborhoodId();
+				} catch (Exception e) {
+					System.out.println("Driver Address Neighborhood resolution failed: " + e.getMessage());
+				}
+			}
+
+			Driver driver = Driver.builder()
+					.carNum(dDto.getCarNum())
+					.carType(dDto.getCarType())
+					.nbhId(nbhId)
+					.user(user)
+					.build();
+			user.setDriver(driver);
+		}
+		
 		try {
 			// 사용자 저장 (여기서 유니크 제약조건 위반 시 예외 발생 가능)
 			var savedUser = repository.save(user);
@@ -103,7 +122,7 @@ public class AuthenticationService {
 			Throwable rootCause = e.getRootCause();
 
 			System.out.println(e);
-			
+
 			if (rootCause instanceof SQLException) {
 				SQLException sqlEx = (SQLException) rootCause;
 
@@ -217,50 +236,71 @@ public class AuthenticationService {
 		}
 	}
 
-
 	public AuthenticationResponse quickRegister(AuthenticationRequest request) {
-		
-		
-	    // 2. 회원 엔티티 생성 (필수 필드들은 임시값으로 채움)
-	    var user = Users.builder()
-	    		.email(request.getEmail())
-	            .password(passwordEncoder.encode(request.getPassword()))
-	            .nickname("관리자생성_" + System.currentTimeMillis()) // 중복 방지
-	            .gender("F")            
-	            .age(0)                   // 하드코딩: 0세
-	            .build();
 
-	    
-	    
-	    try {
-	        // 3. 사용자 저장
-	        var savedUser = repository.save(user);
+		// 2. 회원 엔티티 생성 (필수 필드들은 임시값으로 채움)
+		var user = Users.builder()
+				.email(request.getEmail())
+				.password(passwordEncoder.encode(request.getPassword()))
+				.nickname("관리자생성_" + System.currentTimeMillis()) // 중복 방지
+				.gender("F")
+				.age(0) // 하드코딩: 0세
+				.build();
 
-	        // 4. JWT 토큰 및 리프레시 토큰 생성 (로그인 세션 유지용)
-	        var jwtToken = jwtService.generateToken(savedUser);
-	        var refreshToken = jwtService.generateRefreshToken(savedUser);
+		try {
+			// 3. 사용자 저장
+			var savedUser = repository.save(user);
 
-	        // 5. 토큰 저장 (기존 saveUserToken 메서드 활용)
-	        saveUserToken(savedUser, jwtToken);
+			// 4. JWT 토큰 및 리프레시 토큰 생성 (로그인 세션 유지용)
+			var jwtToken = jwtService.generateToken(savedUser);
+			var refreshToken = jwtService.generateRefreshToken(savedUser);
 
-	        return AuthenticationResponse.builder()
-	                .accessToken(jwtToken)
-	                .refreshToken(refreshToken)
-	                .userId(savedUser.getUserId())
-	                .build();
+			// 5. 토큰 저장 (기존 saveUserToken 메서드 활용)
+			saveUserToken(savedUser, jwtToken);
 
-	    } catch (DataIntegrityViolationException e) {
-	        // 이메일 중복 체크 로직 (기존 register와 동일)
-	        Throwable rootCause = e.getRootCause();
-	        if (rootCause instanceof SQLException) {
-	            SQLException sqlEx = (SQLException) rootCause;
-	            if (sqlEx.getErrorCode() == 1 || (sqlEx.getMessage() != null && sqlEx.getMessage().contains("EMAIL"))) {
-	                throw new DuplicateEmailException("이미 가입된 이메일 주소입니다.");
-	            }
-	        }
-	        throw e;
-	    }
+			return AuthenticationResponse.builder()
+					.accessToken(jwtToken)
+					.refreshToken(refreshToken)
+					.userId(savedUser.getUserId())
+					.build();
+
+		} catch (DataIntegrityViolationException e) {
+			// 이메일 중복 체크 로직 (기존 register와 동일)
+			Throwable rootCause = e.getRootCause();
+			if (rootCause instanceof SQLException) {
+				SQLException sqlEx = (SQLException) rootCause;
+				if (sqlEx.getErrorCode() == 1 || (sqlEx.getMessage() != null && sqlEx.getMessage().contains("EMAIL"))) {
+					throw new DuplicateEmailException("이미 가입된 이메일 주소입니다.");
+				}
+			}
+			throw e;
+		}
 	}
 	
+	
+	// 7. 이메일 찾기 로직
+	public String findEmailByNameAndPhone(String name, String phone) {
+	    return repository.findByNameAndPhone(name, phone) // 이제 에러가 사라집니다.
+	            .map(Users::getEmail)
+	            .orElseThrow(() -> new RuntimeException("일치하는 회원 정보를 찾을 수 없습니다."));
+	}
+
+    // 8. 비밀번호 재설정 로직
+    @Transactional
+    public void resetPassword(PasswordResetRequest request) {
+        // 1. 이메일 인증번호 검증 (이미 만들어둔 emailAuthService 활용)
+        boolean isVerified = emailAuthService.verifyCode(request.getEmail(), request.getCode());
+        
+        if (!isVerified) {
+            throw new RuntimeException("인증번호가 일치하지 않거나 만료되었습니다.");
+        }
+
+        // 2. 비밀번호 변경
+        Users user = repository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+        
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        repository.save(user);
+    }
 
 }
