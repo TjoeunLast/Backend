@@ -25,6 +25,7 @@ public class OrderSnapshot {
     private String startSchedule;
     private String puProvince;
 
+    
     // 상차지 좌표
     private BigDecimal startLat;
     private BigDecimal startLng;

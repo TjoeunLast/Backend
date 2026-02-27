@@ -42,6 +42,8 @@ public class OrderResponse {
     private String startSchedule;
     private String puProvince;
 
+    private Long driverNo;
+    
     // 상차지 좌표
     private BigDecimal startLat;
     private BigDecimal startLng;
@@ -99,7 +101,7 @@ public class OrderResponse {
 
                 // 매필 로직 추가 정산
                 .settlementStatus(order.getSettlement() != null ? order.getSettlement().getStatus() : "READY")
-
+                .driverNo(order.getDriverNo())
                 .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
                 .distance(order.getDistance())
@@ -135,7 +137,6 @@ public class OrderResponse {
                 .tag(s.getTag())
                 .startNbhId(s.getStartNbhId())
                 .endNbhId(s.getEndNbhId())
-
                 // 요약 정보
                 .user(UserSummary.from(order.getUser()))
                 .cancellation(CancellationSummary.from(order.getCancellationInfo()))
