@@ -4,8 +4,10 @@ import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.domain.embedded.OrderSnapshot;
 import com.example.project.domain.order.repository.OrderRepository;
 import com.example.project.domain.settlement.domain.Settlement;
+import com.example.project.domain.settlement.domain.SettlementStatus;
 import com.example.project.domain.settlement.dto.SettlementRegionStatResponse;
 import com.example.project.domain.settlement.dto.SettlementRequest;
+import com.example.project.domain.settlement.dto.SettlementResponse;
 import com.example.project.domain.settlement.dto.SettlementSummaryResponse;
 import com.example.project.domain.settlement.repository.SettlementRepository;
 import com.example.project.member.domain.Users;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,7 +32,8 @@ public class SettlementService {
     private final OrderRepository orderRepository;
 
     /**
-     * 기존 호환용: 정산 초기 생성/갱신
+     * 정산 데이터 초기 생성/갱신
+     * - 화주 또는 관리자만 호출 가능
      */
     public void initiateSettlement(SettlementRequest request, Users user) {
         requireAuthenticated(user);
@@ -66,7 +70,7 @@ public class SettlementService {
         settlement.setCouponDiscount(couponDiscount);
         settlement.setTotalPrice(totalPrice);
         settlement.setFeeRate(DEFAULT_FEE_RATE);
-        settlement.setStatus("READY");
+        settlement.setStatus(SettlementStatus.READY);
         if (settlement.getFeeDate() == null) {
             settlement.setFeeDate(LocalDateTime.now());
         }
@@ -76,30 +80,30 @@ public class SettlementService {
     }
 
     /**
-     * 기존 호환용: 인증 검증 없이 완료 처리(기존 호출 경로 유지)
+     * 레거시 호환용 완료 처리(호출자 권한 검증 없음)
      */
     public void completeSettlement(Long orderId) {
         completeSettlementInternal(orderId, null);
     }
 
     /**
-     * 신규: 권한 검증 포함 완료 처리
+     * 권한 검증 포함 완료 처리
      */
-    public Settlement completeSettlementByUser(Long orderId, Users currentUser) {
-        return completeSettlementInternal(orderId, currentUser);
+    public SettlementResponse completeSettlementByUser(Long orderId, Users currentUser) {
+        return toResponse(completeSettlementInternal(orderId, currentUser));
     }
 
     @Transactional(readOnly = true)
-    public Settlement getSettlementForOrder(Long orderId, Users currentUser) {
+    public SettlementResponse getSettlementForOrder(Long orderId, Users currentUser) {
         requireAuthenticated(currentUser);
         Settlement settlement = settlementRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("settlement not found. orderId=" + orderId));
         validateReadPermission(settlement, currentUser);
-        return settlement;
+        return toResponse(settlement);
     }
 
     @Transactional(readOnly = true)
-    public List<Settlement> getMySettlements(Users currentUser, String status) {
+    public List<SettlementResponse> getMySettlements(Users currentUser, String status) {
         requireAuthenticated(currentUser);
 
         List<Settlement> base;
@@ -114,12 +118,15 @@ public class SettlementService {
         }
 
         if (status == null || status.isBlank()) {
-            return base;
+            return base.stream()
+                    .map(this::toResponse)
+                    .collect(Collectors.toList());
         }
 
-        String normalizedStatus = status.trim();
+        SettlementStatus normalizedStatus = parseSettlementStatus(status);
         return base.stream()
-                .filter(s -> s.getStatus() != null && s.getStatus().equalsIgnoreCase(normalizedStatus))
+                .filter(s -> s.getStatus() == normalizedStatus)
+                .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
@@ -165,7 +172,7 @@ public class SettlementService {
         Settlement settlement = settlementRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new IllegalStateException("settlement not found. orderId=" + orderId));
 
-        settlement.setStatus("COMPLETED");
+        settlement.setStatus(SettlementStatus.COMPLETED);
         settlement.setFeeCompleteDate(LocalDateTime.now());
 
         if (!"COMPLETED".equalsIgnoreCase(order.getStatus())) {
@@ -231,5 +238,32 @@ public class SettlementService {
         } catch (NumberFormatException e) {
             return 0L;
         }
+    }
+
+    private SettlementStatus parseSettlementStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return SettlementStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("invalid settlement status: " + status);
+        }
+    }
+
+    private SettlementResponse toResponse(Settlement settlement) {
+        return SettlementResponse.builder()
+                .settlementId(settlement.getId())
+                .orderId(settlement.getOrder() != null ? settlement.getOrder().getOrderId() : null)
+                .shipperUserId(settlement.getUser() != null ? settlement.getUser().getUserId() : null)
+                .driverUserId(settlement.getOrder() != null ? settlement.getOrder().getDriverNo() : null)
+                .levelDiscount(settlement.getLevelDiscount())
+                .couponDiscount(settlement.getCouponDiscount())
+                .totalPrice(settlement.getTotalPrice())
+                .feeRate(settlement.getFeeRate())
+                .status(settlement.getStatus() == null ? null : settlement.getStatus().name())
+                .feeDate(settlement.getFeeDate())
+                .feeCompleteDate(settlement.getFeeCompleteDate())
+                .build();
     }
 }

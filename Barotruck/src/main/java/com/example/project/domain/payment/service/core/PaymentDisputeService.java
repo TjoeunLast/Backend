@@ -10,6 +10,7 @@ import com.example.project.domain.payment.dto.paymentRequest.UpdatePaymentDisput
 import com.example.project.domain.payment.port.OrderPort;
 import com.example.project.domain.payment.repository.PaymentDisputeRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
+import com.example.project.domain.settlement.domain.SettlementStatus;
 import com.example.project.domain.settlement.repository.SettlementRepository;
 import com.example.project.member.domain.Users;
 import com.example.project.security.user.Role;
@@ -93,10 +94,7 @@ public class PaymentDisputeService {
         }
 
         settlementRepository.findByOrderId(orderId).ifPresent(s -> {
-            s.setStatus(nextStatus.name());
-            if (nextStatus == PaymentDisputeStatus.ADMIN_FORCE_CONFIRMED) {
-                s.setFeeCompleteDate(LocalDateTime.now());
-            }
+            s.setStatus(mapDisputeStatusToSettlementStatus(nextStatus));
             settlementRepository.save(s);
         });
 
@@ -155,7 +153,7 @@ public class PaymentDisputeService {
         updateOrderStatusSafely(orderId, false);
 
         settlementRepository.findByOrderId(orderId).ifPresent(s -> {
-            s.setStatus(TransportPaymentStatus.DISPUTED.name());
+            s.setStatus(SettlementStatus.WAIT);
             settlementRepository.save(s);
         });
     }
@@ -214,6 +212,15 @@ public class PaymentDisputeService {
             case ADMIN_HOLD -> TransportPaymentStatus.ADMIN_HOLD;
             case ADMIN_FORCE_CONFIRMED -> TransportPaymentStatus.ADMIN_FORCE_CONFIRMED;
             case ADMIN_REJECTED -> TransportPaymentStatus.ADMIN_REJECTED;
+        };
+    }
+
+    private SettlementStatus mapDisputeStatusToSettlementStatus(PaymentDisputeStatus status) {
+        return switch (status) {
+            case PENDING -> SettlementStatus.WAIT;
+            case ADMIN_HOLD -> SettlementStatus.WAIT;
+            case ADMIN_FORCE_CONFIRMED -> SettlementStatus.COMPLETED;
+            case ADMIN_REJECTED -> SettlementStatus.WAIT;
         };
     }
 

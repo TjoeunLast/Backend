@@ -49,6 +49,9 @@ public class TossPaymentService {
     @Value("${payment.toss.redirect.fail-url:barotruck://pay/fail}")
     private String tossFailUrl;
 
+    @Value("${payment.toss.webhook-secret:}")
+    private String tossWebhookSecret;
+
     @Transactional
     public TossPrepareResponse prepare(Users currentUser, Long orderId, TossPrepareRequest request) {
         requireAuthenticated(currentUser);
@@ -62,6 +65,10 @@ public class TossPaymentService {
         OrderPort.OrderSnapshot snap = orderPort.getRequiredSnapshot(orderId);
         if (snap.shipperUserId() == null || !snap.shipperUserId().equals(currentUser.getUserId())) {
             throw new IllegalStateException("shipper can prepare only own order");
+        }
+        validatePaymentStartOrderStatus(snap.status());
+        if (snap.driverUserId() == null) {
+            throw new IllegalStateException("assigned driver not found");
         }
 
         BigDecimal amount = snap.amount();
@@ -141,6 +148,8 @@ public class TossPaymentService {
         if (!tx.getShipperUserId().equals(currentUser.getUserId())) {
             throw new IllegalStateException("shipper can confirm only own order");
         }
+        OrderPort.OrderSnapshot snap = orderPort.getRequiredSnapshot(orderId);
+        validatePaymentStartOrderStatus(snap.status());
 
         BigDecimal confirmAmount = request.getAmount() == null ? tx.getAmount() : request.getAmount();
         if (request.getAmount() != null && tx.getAmount().compareTo(request.getAmount()) != 0) {
@@ -194,9 +203,10 @@ public class TossPaymentService {
     }
 
     @Transactional
-    public void handleWebhook(String eventId, String payload) {
+    public void handleWebhook(String eventId, String payload, String webhookSecretHeader) {
         String externalEventId = defaultIfBlank(eventId, "NO-ID-" + UUID.randomUUID());
         String safePayload = payload == null ? "{}" : payload;
+        verifyWebhookSecret(safePayload, webhookSecretHeader);
 
         PaymentGatewayWebhookEvent existing = findWebhookEvent(externalEventId);
         if (existing != null) {
@@ -406,6 +416,29 @@ public class TossPaymentService {
         return true;
     }
 
+    private void verifyWebhookSecret(String payload, String webhookSecretHeader) {
+        String expected = normalize(tossWebhookSecret);
+        if (isBlank(expected)) {
+            return;
+        }
+
+        String headerSecret = normalize(webhookSecretHeader);
+        if (!isBlank(headerSecret) && expected.equals(headerSecret)) {
+            return;
+        }
+
+        try {
+            JsonNode node = objectMapper.readTree(payload);
+            String payloadSecret = firstNonBlank(readText(node, "secret"), readText(node, "webhookSecret"));
+            if (!isBlank(payloadSecret) && expected.equals(payloadSecret.trim())) {
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+
+        throw new IllegalStateException("invalid toss webhook secret");
+    }
+
     private String readText(JsonNode node, String fieldName) {
         JsonNode value = node.get(fieldName);
         if (value == null || value.isNull()) {
@@ -462,6 +495,23 @@ public class TossPaymentService {
             return url;
         }
         return url.replace("{orderId}", String.valueOf(orderId));
+    }
+
+    private void validatePaymentStartOrderStatus(String orderStatus) {
+        String status = orderStatus == null ? "" : orderStatus.trim().toUpperCase(Locale.ROOT);
+        boolean allowed = switch (status) {
+            case "COMPLETED",
+                 "PAID",
+                 "CONFIRMED",
+                 "DISPUTED",
+                 "ADMIN_HOLD",
+                 "ADMIN_FORCE_CONFIRMED",
+                 "ADMIN_REJECTED" -> true;
+            default -> false;
+        };
+        if (!allowed) {
+            throw new IllegalStateException("payment can start only after transport completed");
+        }
     }
 
     private void requireAuthenticated(Users currentUser) {

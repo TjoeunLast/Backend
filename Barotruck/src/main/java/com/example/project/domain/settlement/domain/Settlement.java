@@ -1,12 +1,13 @@
 package com.example.project.domain.settlement.domain;
 
-import java.time.LocalDateTime;
 
 import com.example.project.domain.order.domain.Order;
 import com.example.project.member.domain.Users;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,6 +22,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "SETTLEMENT")
@@ -55,8 +58,10 @@ public class Settlement {
     @Column(name = "FEE_RATE")
     private Long feeRate; // 플랫폼 수수료율 (예: 10)
 
+    // 정산 상태(enum 문자열 저장)
+    @Enumerated(EnumType.STRING)
     @Column(name = "STATUS")
-    private String status; // 정산 상태 (예: READY, COMPLETED, WAIT)
+    private SettlementStatus status; // READY / COMPLETED / WAIT
 
     // 4. 화주 정보 (이미지: userId/USER_NO)
     @ManyToOne(fetch = FetchType.LAZY)
@@ -84,7 +89,9 @@ public class Settlement {
      * 수식: (최종 금액 * 수수료율) / 100
      */
     public Long calculatePlatformRevenue() {
-        if (this.totalPrice == null || this.feeRate == null) return 0L;
+        if (this.totalPrice == null || this.feeRate == null) {
+            return 0L;
+        }
         return (this.totalPrice * this.feeRate) / 100;
     }
     

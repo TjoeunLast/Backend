@@ -2,6 +2,7 @@ package com.example.project.domain.order.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.example.project.domain.order.domain.Order;
@@ -102,13 +103,15 @@ public class OrderResponse {
                 .status(order.getStatus())
 
                 // 매필 로직 추가 정산
-                .settlementStatus(order.getSettlement() != null ? order.getSettlement().getStatus() : "READY")
+                .settlementStatus(order.getSettlement() != null && order.getSettlement().getStatus() != null
+                        ? order.getSettlement().getStatus().name()
+                        : "READY")
                 .driverNo(order.getDriverNo())
                 .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
                 .distance(order.getDistance())
                 .duration(order.getDuration())
-                .driverList(order.getDriverList())
+                .driverList(order.getDriverList() == null ? new ArrayList<>() : new ArrayList<>(order.getDriverList()))
                 
                 // Snapshot 데이터 매핑
                 .startLat(s.getStartLat())
@@ -138,7 +141,7 @@ public class OrderResponse {
                 .payMethod(s.getPayMethod())
                 .instant(s.isInstant())
                 .memo(s.getMemo())
-                .tag(s.getTag())
+                .tag(s.getTag() == null ? new ArrayList<>() : new ArrayList<>(s.getTag()))
                 .startNbhId(s.getStartNbhId())
                 .endNbhId(s.getEndNbhId())
                 // 요약 정보
