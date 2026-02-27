@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +39,15 @@ public class TossPaymentService {
     private final OrderPort orderPort;
     private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
+
+    @Value("${payment.toss.client-key:}")
+    private String tossClientKey;
+
+    @Value("${payment.toss.redirect.success-url:barotruck://pay/success}")
+    private String tossSuccessUrl;
+
+    @Value("${payment.toss.redirect.fail-url:barotruck://pay/fail}")
+    private String tossFailUrl;
 
     @Transactional
     public TossPrepareResponse prepare(Users currentUser, Long orderId, TossPrepareRequest request) {
@@ -62,8 +72,9 @@ public class TossPaymentService {
         PaymentMethod method = resolveTossMethod(request.getMethod(), request.getPayChannel());
         PayChannel payChannel = resolvePayChannel(method, request.getPayChannel());
         String pgOrderId = createPgOrderId(orderId);
-        String successUrl = defaultIfBlank(request.getSuccessUrl(), "/payments/success?orderId=" + orderId);
-        String failUrl = defaultIfBlank(request.getFailUrl(), "/payments/fail?orderId=" + orderId);
+        String successUrl = resolveRedirectUrl(tossSuccessUrl, orderId);
+        String failUrl = resolveRedirectUrl(tossFailUrl, orderId);
+        String orderName = defaultIfBlank(request.getOrderName(), "Barotruck Order #" + orderId);
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(30);
 
         PaymentGatewayTransaction tx = PaymentGatewayTransaction.prepare(
@@ -83,10 +94,16 @@ public class TossPaymentService {
 
         return TossPrepareResponse.builder()
                 .provider(PaymentProvider.TOSS)
+                .clientKey(normalize(tossClientKey))
+                .orderId(orderId)
                 .pgOrderId(pgOrderId)
                 .amount(amount)
+                .method(method)
+                .payChannel(payChannel)
+                .orderName(orderName)
                 .successUrl(successUrl)
                 .failUrl(failUrl)
+                .confirmEndpoint("/api/v1/payments/orders/" + orderId + "/toss/confirm")
                 .expiresAt(expiresAt)
                 .build();
     }
@@ -97,16 +114,20 @@ public class TossPaymentService {
         if (currentUser.getRole() != Role.SHIPPER) {
             throw new IllegalStateException("only shipper can confirm toss payment");
         }
-        if (request == null
-                || isBlank(request.getPaymentKey())
-                || isBlank(request.getPgOrderId())
-                || request.getAmount() == null) {
-            throw new IllegalArgumentException("paymentKey, pgOrderId, amount are required");
+        if (request == null || isBlank(request.getPaymentKey())) {
+            throw new IllegalArgumentException("paymentKey is required");
         }
 
-        PaymentGatewayTransaction tx = paymentGatewayTransactionRepository
-                .findByProviderAndPgOrderId(PaymentProvider.TOSS, request.getPgOrderId())
-                .orElseThrow(() -> new IllegalArgumentException("prepared transaction not found"));
+        PaymentGatewayTransaction tx;
+        if (!isBlank(request.getPgOrderId())) {
+            tx = paymentGatewayTransactionRepository
+                    .findByProviderAndPgOrderId(PaymentProvider.TOSS, request.getPgOrderId())
+                    .orElseThrow(() -> new IllegalArgumentException("prepared transaction not found"));
+        } else {
+            tx = paymentGatewayTransactionRepository
+                    .findTopByOrderIdAndProviderOrderByCreatedAtDesc(orderId, PaymentProvider.TOSS)
+                    .orElseThrow(() -> new IllegalArgumentException("prepared transaction not found"));
+        }
 
         if (tx.getStatus() != GatewayTxStatus.CONFIRMED && tx.isExpired(LocalDateTime.now())) {
             tx.markExpired();
@@ -120,7 +141,9 @@ public class TossPaymentService {
         if (!tx.getShipperUserId().equals(currentUser.getUserId())) {
             throw new IllegalStateException("shipper can confirm only own order");
         }
-        if (tx.getAmount().compareTo(request.getAmount()) != 0) {
+
+        BigDecimal confirmAmount = request.getAmount() == null ? tx.getAmount() : request.getAmount();
+        if (request.getAmount() != null && tx.getAmount().compareTo(request.getAmount()) != 0) {
             throw new IllegalStateException("amount mismatch");
         }
 
@@ -142,8 +165,9 @@ public class TossPaymentService {
             return paymentLifecycleService.applyPaidFromGatewayTx(tx);
         }
 
+        String confirmPgOrderId = defaultIfBlank(request.getPgOrderId(), tx.getPgOrderId());
         TossPaymentClient.ConfirmResult confirmResult =
-                tossPaymentClient.confirm(request.getPaymentKey(), request.getPgOrderId(), request.getAmount());
+                tossPaymentClient.confirm(request.getPaymentKey(), confirmPgOrderId, confirmAmount);
 
         if (!confirmResult.success()) {
             tx.markFailed(
@@ -156,6 +180,14 @@ public class TossPaymentService {
             throw new IllegalStateException("toss confirm failed: " + defaultIfBlank(confirmResult.failMessage(), "unknown"));
         }
 
+        PaymentMethod confirmedMethod = resolveConfirmedMethod(confirmResult.methodText(), tx.getMethod());
+        PayChannel confirmedChannel = resolveConfirmedChannel(
+                confirmedMethod,
+                confirmResult.methodText(),
+                confirmResult.easyPayProvider(),
+                tx.getPayChannel()
+        );
+        tx.applyMethodAndChannel(confirmedMethod, confirmedChannel);
         tx.markConfirmed(request.getPaymentKey(), confirmResult.transactionId(), confirmResult.rawPayload());
         paymentGatewayTransactionRepository.save(tx);
         return paymentLifecycleService.applyPaidFromGatewayTx(tx);
@@ -226,6 +258,20 @@ public class TossPaymentService {
                 if (tx.getStatus() != GatewayTxStatus.CONFIRMED) {
                     String resolvedPaymentKey = defaultIfBlank(paymentKey, tx.getPaymentKey());
                     String resolvedTxId = defaultIfBlank(paymentKey, tx.getTransactionId());
+                    String methodText = readText(node, "method");
+                    String easyPayProvider = null;
+                    JsonNode easyPayNode = node.get("easyPay");
+                    if (easyPayNode != null && !easyPayNode.isNull()) {
+                        easyPayProvider = readText(easyPayNode, "provider");
+                    }
+                    PaymentMethod confirmedMethod = resolveConfirmedMethod(methodText, tx.getMethod());
+                    PayChannel confirmedChannel = resolveConfirmedChannel(
+                            confirmedMethod,
+                            methodText,
+                            easyPayProvider,
+                            tx.getPayChannel()
+                    );
+                    tx.applyMethodAndChannel(confirmedMethod, confirmedChannel);
                     tx.markConfirmed(resolvedPaymentKey, resolvedTxId, safePayload);
                     paymentGatewayTransactionRepository.save(tx);
                 }
@@ -291,6 +337,39 @@ public class TossPaymentService {
             return PayChannel.CARD;
         }
         return PayChannel.TRANSFER;
+    }
+
+    private PaymentMethod resolveConfirmedMethod(String methodText, PaymentMethod fallback) {
+        if (isBlank(methodText)) {
+            return fallback == null ? PaymentMethod.CARD : fallback;
+        }
+        String normalized = methodText.toUpperCase(Locale.ROOT);
+        if (normalized.contains("계좌") || normalized.contains("TRANSFER") || normalized.contains("ACCOUNT")) {
+            return PaymentMethod.TRANSFER;
+        }
+        if (normalized.contains("CARD") || normalized.contains("카드") || normalized.contains("간편")) {
+            return PaymentMethod.CARD;
+        }
+        return fallback == null ? PaymentMethod.CARD : fallback;
+    }
+
+    private PayChannel resolveConfirmedChannel(
+            PaymentMethod method,
+            String methodText,
+            String easyPayProvider,
+            PayChannel fallback
+    ) {
+        if (method == PaymentMethod.TRANSFER) {
+            return PayChannel.TRANSFER;
+        }
+        if (method == PaymentMethod.CARD) {
+            String normalized = defaultIfBlank(methodText, "").toUpperCase(Locale.ROOT);
+            if (!isBlank(easyPayProvider) || normalized.contains("간편") || normalized.contains("EASY")) {
+                return PayChannel.APP_CARD;
+            }
+            return PayChannel.CARD;
+        }
+        return fallback == null ? PayChannel.CARD : fallback;
     }
 
     private String createPgOrderId(Long orderId) {
@@ -372,6 +451,17 @@ public class TossPaymentService {
             return null;
         }
         return value.trim();
+    }
+
+    private String resolveRedirectUrl(String configuredUrl, Long orderId) {
+        String url = defaultIfBlank(configuredUrl, "");
+        if (isBlank(url)) {
+            return null;
+        }
+        if (orderId == null) {
+            return url;
+        }
+        return url.replace("{orderId}", String.valueOf(orderId));
     }
 
     private void requireAuthenticated(Users currentUser) {

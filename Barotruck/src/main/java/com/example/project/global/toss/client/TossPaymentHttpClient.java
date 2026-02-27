@@ -42,13 +42,15 @@ public class TossPaymentHttpClient implements TossPaymentClient {
                         null,
                         "TOSS_SECRET_KEY_MISSING",
                         "payment.toss.secret-key is required for real toss confirm",
+                        null,
+                        null,
                         null
                 );
             }
             log.warn("toss secret key missing. fallback mock confirm is enabled.");
             String mockTid = "MOCK-TOSS-" + UUID.randomUUID();
             String raw = "{\"mock\":true,\"orderId\":\"" + pgOrderId + "\",\"paymentKey\":\"" + paymentKey + "\"}";
-            return new ConfirmResult(true, mockTid, null, null, raw);
+            return new ConfirmResult(true, mockTid, null, null, raw, "카드", null);
         }
 
         String auth = Base64.getEncoder().encodeToString((tossSecretKey + ":").getBytes(StandardCharsets.UTF_8));
@@ -71,7 +73,7 @@ public class TossPaymentHttpClient implements TossPaymentClient {
                     .block();
         } catch (Exception e) {
             String message = e.getMessage();
-            return new ConfirmResult(false, null, "TOSS_HTTP_ERROR", message, message);
+            return new ConfirmResult(false, null, "TOSS_HTTP_ERROR", message, message, null, null);
         }
 
         try {
@@ -83,9 +85,15 @@ public class TossPaymentHttpClient implements TossPaymentClient {
             if (txId == null) {
                 txId = "TOSS-" + UUID.randomUUID();
             }
-            return new ConfirmResult(true, txId, null, null, responseBody);
+            String methodText = readText(node, "method");
+            String easyPayProvider = null;
+            JsonNode easyPayNode = node.get("easyPay");
+            if (easyPayNode != null && !easyPayNode.isNull()) {
+                easyPayProvider = readText(easyPayNode, "provider");
+            }
+            return new ConfirmResult(true, txId, null, null, responseBody, methodText, easyPayProvider);
         } catch (Exception e) {
-            return new ConfirmResult(false, null, "TOSS_PARSE_ERROR", e.getMessage(), responseBody);
+            return new ConfirmResult(false, null, "TOSS_PARSE_ERROR", e.getMessage(), responseBody, null, null);
         }
     }
 

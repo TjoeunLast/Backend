@@ -35,21 +35,8 @@ public class TransportPaymentService {
         return paymentLifecycleService.markPaid(currentUser, orderId, method, paymentTiming, proofUrl, paidAt);
     }
 
-    public TransportPayment externalPay(
-            Users currentUser,
-            Long orderId,
-            PaymentMethod method,
-            PaymentTiming paymentTiming
-    ) {
-        return paymentLifecycleService.externalPay(currentUser, orderId, method, paymentTiming);
-    }
-
     public TransportPayment confirm(Users currentUser, Long orderId) {
         return paymentLifecycleService.confirmByDriver(currentUser, orderId);
-    }
-
-    public TransportPayment dispute(Users currentUser, Long orderId) {
-        return paymentDisputeService.legacyDispute(currentUser, orderId);
     }
 
     public PaymentDispute createDispute(

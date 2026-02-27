@@ -9,7 +9,6 @@ import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.Transp
 import com.example.project.domain.payment.port.OrderPort;
 import com.example.project.domain.payment.port.UserPort;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
-import com.example.project.domain.payment.service.client.ExternalPaymentClient;
 import com.example.project.domain.settlement.domain.Settlement;
 import com.example.project.domain.settlement.repository.SettlementRepository;
 import com.example.project.member.domain.Users;
@@ -27,7 +26,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PaymentLifecycleService {
 
-    private final ExternalPaymentClient externalPaymentClient;
     private final TransportPaymentRepository transportPaymentRepository;
     private final OrderPort orderPort;
     private final UserPort userPort;
@@ -87,76 +85,6 @@ public class PaymentLifecycleService {
 
         TransportPayment saved = transportPaymentRepository.save(transportPayment);
         upsertSettlementOnPaid(orderId, snap.shipperUserId(), snap.amount(), fee);
-        return saved;
-    }
-
-    @Transactional
-    public TransportPayment externalPay(
-            Users currentUser,
-            Long orderId,
-            PaymentMethod method,
-            PaymentTiming paymentTiming
-    ) {
-        requireAuthenticated(currentUser);
-        if (currentUser.getRole() != Role.SHIPPER) {
-            throw new IllegalStateException("only shipper can pay");
-        }
-
-        Settlement settlement = settlementRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalStateException("settlement not found. orderId=" + orderId));
-
-        Long totalPriceLong = settlement.getTotalPrice();
-        if (totalPriceLong == null || totalPriceLong <= 0) {
-            throw new IllegalStateException("invalid TOTAL_PRICE. orderId=" + orderId);
-        }
-
-        BigDecimal totalPrice = BigDecimal.valueOf(totalPriceLong);
-        ExternalPaymentClient.ExternalPayResult result =
-                externalPaymentClient.pay("ORDER-" + orderId, totalPriceLong, method);
-
-        if (!result.success()) {
-            throw new IllegalStateException("external payment failed: " + result.failReason());
-        }
-
-        OrderPort.OrderSnapshot snap = orderPort.getRequiredSnapshot(orderId);
-        Long userLevel = userPort.getRequiredUser(snap.shipperUserId()).userLevel();
-        boolean firstPaymentPromoEligible =
-                transportPaymentRepository.countByShipperUserIdAndStatusIn(
-                        snap.shipperUserId(),
-                        paidOrConfirmedStatuses()
-                ) == 0;
-
-        FeePolicyService.FeeResult fee = feePolicyService.calculate(
-                totalPrice,
-                userLevel,
-                firstPaymentPromoEligible
-        );
-
-        TransportPayment transportPayment = transportPaymentRepository.findByOrderId(orderId)
-                .orElseGet(() -> TransportPayment.ready(
-                        orderId,
-                        snap.shipperUserId(),
-                        snap.driverUserId(),
-                        totalPrice,
-                        fee.feeRate(),
-                        fee.feeAmount(),
-                        fee.netAmount(),
-                        method,
-                        resolvePaymentTiming(paymentTiming)
-                ));
-
-        if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED
-                || transportPayment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED) {
-            return transportPayment;
-        }
-
-        transportPayment.applyPaymentTiming(resolvePaymentTiming(paymentTiming));
-        transportPayment.markPaid(result.transactionId(), LocalDateTime.now());
-        transportPayment.setPgTid(result.transactionId());
-        orderPort.setOrderPaid(orderId);
-
-        TransportPayment saved = transportPaymentRepository.save(transportPayment);
-        touchSettlementOnPaid(settlement);
         return saved;
     }
 
@@ -265,14 +193,6 @@ public class PaymentLifecycleService {
         settlement.setFeeRate(feeRatePercent);
         settlement.setStatus("READY");
         settlement.setFeeDate(LocalDateTime.now());
-        settlementRepository.save(settlement);
-    }
-
-    private void touchSettlementOnPaid(Settlement settlement) {
-        if (settlement.getFeeDate() == null) {
-            settlement.setFeeDate(LocalDateTime.now());
-        }
-        settlement.setStatus("READY");
         settlementRepository.save(settlement);
     }
 
