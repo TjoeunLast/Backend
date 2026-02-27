@@ -40,8 +40,7 @@
                     body: {
                         method: "{prepareMethod}",
                         payChannel: "{payChannel}",
-                        successUrl: "{successUrl}",
-                        failUrl: "{failUrl}"
+                        orderName: "Barotruck Toss Test"
                     }
                 },
                 { label: "2) 결제창 열기", kind: "custom", custom: "openTossPaymentWindow", required: ["clientKey", "pgOrderId", "amount"] },
@@ -51,11 +50,9 @@
                     method: "POST",
                     tokenId: "shipperToken",
                     path: "/api/v1/payments/orders/{orderId}/toss/confirm",
-                    required: ["orderId", "pgOrderId", "paymentKey", "amount"],
+                    required: ["orderId", "paymentKey"],
                     body: {
-                        paymentKey: "{paymentKey}",
-                        pgOrderId: "{pgOrderId}",
-                        amount: "{amount}"
+                        paymentKey: "{paymentKey}"
                     }
                 },
                 {
@@ -238,8 +235,7 @@
                     body: {
                         method: "{prepareMethod}",
                         payChannel: "{payChannel}",
-                        successUrl: "{successUrl}",
-                        failUrl: "{failUrl}"
+                        orderName: "Barotruck Toss Test"
                     }
                 },
                 { label: "2) 결제창 열기", kind: "custom", custom: "openTossPaymentWindow", required: ["clientKey", "pgOrderId", "amount"] },
@@ -249,11 +245,9 @@
                     method: "POST",
                     tokenId: "shipperToken",
                     path: "/api/v1/payments/orders/{orderId}/toss/confirm",
-                    required: ["orderId", "pgOrderId", "paymentKey", "amount"],
+                    required: ["orderId", "paymentKey"],
                     body: {
-                        paymentKey: "{paymentKey}",
-                        pgOrderId: "{pgOrderId}",
-                        amount: "{amount}"
+                        paymentKey: "{paymentKey}"
                     }
                 },
                 {

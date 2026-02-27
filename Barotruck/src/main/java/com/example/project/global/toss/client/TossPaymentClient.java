@@ -11,7 +11,9 @@ public interface TossPaymentClient {
             String transactionId,
             String failCode,
             String failMessage,
-            String rawPayload
+            String rawPayload,
+            String methodText,
+            String easyPayProvider
     ) {}
 }
 
