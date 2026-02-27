@@ -231,6 +231,7 @@ public class Order {
     public void addToDriverList(Long driverId) {
         if (!this.driverList.contains(driverId)) {
             this.driverList.add(driverId);
+            this.changeStatus("APPLIED");
         }
     }
 
