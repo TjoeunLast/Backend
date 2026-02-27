@@ -29,21 +29,6 @@ public class PaymentDisputeService {
     private final OrderPort orderPort;
 
     @Transactional
-    public TransportPayment legacyDispute(Users currentUser, Long orderId) {
-        createDisputeInternal(
-                currentUser,
-                orderId,
-                null,
-                PaymentDisputeReason.OTHER,
-                "legacy dispute request",
-                null,
-                true
-        );
-        return transportPaymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("transport payment not found. orderId=" + orderId));
-    }
-
-    @Transactional
     public PaymentDispute createDispute(Users currentUser, Long orderId, CreatePaymentDisputeRequest request) {
         requireAuthenticated(currentUser);
         if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.DRIVER) {

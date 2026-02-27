@@ -199,15 +199,6 @@ public class PaymentController {
         return ApiResponse.ok(TransportPaymentResponse.from(p));
     }
 
-    @PostMapping("/orders/{orderId}/dispute")
-    @PreAuthorize("isAuthenticated()")
-    public ApiResponse<TransportPaymentResponse> dispute(
-            @PathVariable("orderId") Long orderId,
-            @AuthenticationPrincipal Users currentUser) {
-        var p = transportPaymentService.dispute(currentUser, orderId);
-        return ApiResponse.ok(TransportPaymentResponse.from(p));
-    }
-
     @PostMapping("/orders/{orderId}/disputes")
     @PreAuthorize("hasAnyRole('DRIVER','ADMIN')")
     public ApiResponse<PaymentDisputeResponse> createDispute(
@@ -269,22 +260,6 @@ public class PaymentController {
     ) {
         var invoice = feeInvoiceService.markInvoicePaid(currentUser, invoiceId);
         return ApiResponse.ok(invoice);
-    }
-
-    @PostMapping("/orders/{orderId}/external-pay")
-    @PreAuthorize("hasRole('SHIPPER')")
-    public ApiResponse<TransportPaymentResponse> externalPay(
-            @PathVariable("orderId") Long orderId,
-            @RequestBody ExternalPayRequest request,
-            @AuthenticationPrincipal Users currentUser
-    ) {
-        var p = transportPaymentService.externalPay(
-                currentUser,
-                orderId,
-                request.getMethod(),
-                request.getPaymentTiming()
-        );
-        return ApiResponse.ok(TransportPaymentResponse.from(p));
     }
 }
 

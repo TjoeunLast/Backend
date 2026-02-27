@@ -17,17 +17,14 @@ window.PaymentApiTestConfig = {
             body: {
                 method: "CARD",
                 payChannel: "APP_CARD",
-                successUrl: "barotruck://pay/success",
-                failUrl: "barotruck://pay/fail"
+                orderName: "Barotruck Toss Test"
             }
         },
         tossConfirm: {
             method: "POST",
             path: "/api/v1/payments/orders/<ORDER_ID>/toss/confirm",
             body: {
-                paymentKey: "<PAYMENT_KEY>",
-                pgOrderId: "<PG_ORDER_ID>",
-                amount: "<AMOUNT>"
+                paymentKey: "<PAYMENT_KEY>"
             }
         },
         driverConfirm: {
@@ -67,4 +64,3 @@ window.PaymentApiTestConfig = {
         }
     }
 };
-

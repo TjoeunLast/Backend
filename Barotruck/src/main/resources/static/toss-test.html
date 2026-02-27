@@ -353,8 +353,7 @@
         const body = {
             method: DEFAULT_PAY_METHOD,
             payChannel: DEFAULT_PAY_CHANNEL,
-            successUrl: getSuccessUrl(),
-            failUrl: getFailUrl()
+            orderName: "Barotruck Toss Test"
         };
         log("prepare request", { url, body });
 
@@ -381,6 +380,9 @@
             payMethod: DEFAULT_PAY_METHOD,
             payChannel: DEFAULT_PAY_CHANNEL
         };
+        if ((!v.clientKey || v.clientKey.length === 0) && prepared.clientKey) {
+            document.getElementById("clientKey").value = prepared.clientKey;
+        }
         setPrepareState(state);
         setPgOrderMap(prepared.pgOrderId, v.internalOrderId);
         setPgOrderId(prepared.pgOrderId);
@@ -395,7 +397,8 @@
             alert("prepare first");
             return;
         }
-        if (!v.clientKey) {
+        const resolvedClientKey = v.clientKey || (prepared && prepared.clientKey);
+        if (!resolvedClientKey) {
             alert("clientKey is required");
             return;
         }
@@ -409,7 +412,7 @@
         const amountNumber = Number(prepared.amount);
 
         try {
-            const tossPayments = window.TossPayments(v.clientKey);
+            const tossPayments = window.TossPayments(resolvedClientKey);
             const payment = tossPayments.payment({ customerKey });
             await payment.requestPayment({
                 method: "CARD",
@@ -418,17 +421,17 @@
                     value: amountNumber
                 },
                 orderId: prepared.pgOrderId,
-                orderName: "Barotruck Toss Test",
+                orderName: prepared.orderName || "Barotruck Toss Test",
                 successUrl: prepared.successUrl,
                 failUrl: prepared.failUrl
             });
         } catch (firstError) {
             try {
-                const tossPayments = window.TossPayments(v.clientKey);
+                const tossPayments = window.TossPayments(resolvedClientKey);
                 await tossPayments.requestPayment("카드", {
                     amount: amountNumber,
                     orderId: prepared.pgOrderId,
-                    orderName: "Barotruck Toss Test",
+                    orderName: prepared.orderName || "Barotruck Toss Test",
                     successUrl: prepared.successUrl,
                     failUrl: prepared.failUrl
                 });
@@ -452,14 +455,13 @@
             return;
         }
 
-        const pgOrderId = redirect.orderId || (prepared && prepared.pgOrderId) || v.pgOrderId;
         const paymentKey = redirect.paymentKey;
-        const amount = redirect.amount || (prepared && prepared.amount);
-        if (!pgOrderId || !paymentKey || !amount) {
-            alert("paymentKey/orderId/amount missing. run payment success redirect first");
+        if (!paymentKey) {
+            alert("paymentKey missing. run payment success redirect first");
             return;
         }
 
+        const pgOrderId = redirect.orderId || (prepared && prepared.pgOrderId) || v.pgOrderId;
         const internalOrderId = getInternalOrderIdByPg(pgOrderId) || v.internalOrderId;
         if (!internalOrderId) {
             alert("internalOrderId not found");
@@ -469,9 +471,7 @@
         const baseUrl = getBaseUrl();
         const url = baseUrl + "/api/v1/payments/orders/" + internalOrderId + "/toss/confirm";
         const body = {
-            paymentKey: paymentKey,
-            pgOrderId: pgOrderId,
-            amount: Number(amount)
+            paymentKey: paymentKey
         };
         log("shipper confirm request", { url, body });
 

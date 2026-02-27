@@ -225,6 +225,15 @@ public class PaymentGatewayTransaction {
         this.paymentKey = paymentKey;
     }
 
+    public void applyMethodAndChannel(PaymentMethod method, PayChannel payChannel) {
+        if (method != null) {
+            this.method = method;
+        }
+        if (payChannel != null) {
+            this.payChannel = payChannel;
+        }
+    }
+
     public boolean isExpired(LocalDateTime now) {
         return this.expiresAt != null && now != null && now.isAfter(this.expiresAt);
     }

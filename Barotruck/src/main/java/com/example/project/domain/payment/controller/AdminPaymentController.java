@@ -1,16 +1,20 @@
 package com.example.project.domain.payment.controller;
 
 import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisputeRequest;
+import com.example.project.domain.payment.dto.paymentRequest.UpdateFeePolicyRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdatePaymentDisputeStatusRequest;
+import com.example.project.domain.payment.dto.paymentResponse.FeePolicyResponse;
 import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeResponse;
 import com.example.project.domain.payment.service.core.DriverPayoutService;
 import com.example.project.domain.payment.service.core.FeeInvoiceBatchService;
+import com.example.project.domain.payment.service.core.FeePolicyService;
 import com.example.project.domain.payment.service.core.FeeInvoiceService;
 import com.example.project.domain.payment.service.core.PaymentReconciliationService;
 import com.example.project.domain.payment.service.core.PaymentRetryQueueService;
 import com.example.project.domain.payment.service.core.TransportPaymentService;
 import com.example.project.global.api.ApiResponse;
 import com.example.project.member.domain.Users;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,6 +31,7 @@ public class AdminPaymentController {
     private final FeeInvoiceBatchService feeInvoiceBatchService;
     private final DriverPayoutService driverPayoutService;
     private final FeeInvoiceService feeInvoiceService;
+    private final FeePolicyService feePolicyService;
     private final PaymentReconciliationService paymentReconciliationService;
     private final PaymentRetryQueueService paymentRetryQueueService;
 
@@ -90,6 +95,20 @@ public class AdminPaymentController {
     public ApiResponse<?> runReconciliation() {
         paymentReconciliationService.runDailyReconciliation();
         return ApiResponse.ok(true);
+    }
+
+    @GetMapping("/fee-policy")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<FeePolicyResponse> getFeePolicy() {
+        return ApiResponse.ok(feePolicyService.getCurrentPolicy());
+    }
+
+    @PatchMapping("/fee-policy")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<FeePolicyResponse> updateFeePolicy(
+            @Valid @RequestBody UpdateFeePolicyRequest request
+    ) {
+        return ApiResponse.ok(feePolicyService.updatePolicy(request));
     }
 
 }
