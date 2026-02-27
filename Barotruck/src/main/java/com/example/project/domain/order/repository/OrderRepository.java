@@ -19,11 +19,13 @@ import com.example.project.member.domain.Users;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
        Optional<Order> findTopByOrderByOrderIdDesc();
+
        // 화주: 자신이 올린 요청 목록 조회
        List<Order> findByUserOrderByCreatedAtDesc(Users user);
 
        // 차주: 현재 매칭 대기 중인(REQUESTED) 전체 오더 조회
-       List<Order> findByStatusOrderByCreatedAtDesc(String status);
+       @Query("SELECT o FROM Order o JOIN o.snapshot s WHERE o.status = :status AND (s.startSchedule > :now OR s.startSchedule IS NULL) ORDER BY o.createdAt DESC")
+       List<Order> findAvailableOrders(@Param("status") String status, @Param("now") String now);
 
        // 특정 상태 리스트에 포함된 오더 조회 (예: 모든 취소 상태)
        List<Order> findByStatusInOrderByCreatedAtDesc(List<String> statuses);
@@ -118,12 +120,12 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
                      "WHERE o.status = 'REQUESTED' " +
                      "AND (s.reqCarType = :carType OR s.reqCarType IS NULL) " +
                      "AND s.tonnage <= :driverTonnage " +
-                     "AND (:nbhId IS NULL OR s.startNbhId = :nbhId) " + // 내 지역 오더 필터링
+                     "AND (s.startSchedule > :now OR s.startSchedule IS NULL) " +
                      "ORDER BY o.createdAt DESC")
        List<Order> findCustomOrders(
                      @Param("carType") String carType,
                      @Param("driverTonnage") BigDecimal driverTonnage,
-                     @Param("nbhId") Long nbhId);
+                     @Param("now") String now);
 
        // status가 String인 경우에도 In 키워드로 목록 조회가 가능합니다. 배차 현황중인 오더목록 볼수있는 (차주입장에서)
        List<Order> findByDriverNoAndStatusIn(Long driverNo, List<String> statuses);
