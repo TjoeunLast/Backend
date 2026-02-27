@@ -2,6 +2,7 @@ package com.example.project.domain.order.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.example.project.domain.order.domain.Order;
@@ -96,6 +97,10 @@ public class OrderResponse {
         OrderSnapshot s = order.getSnapshot();
         if (s == null)
             return null;
+        
+        List<Long> safeDriverList = order.getDriverList() != null 
+                ? new ArrayList<>(order.getDriverList()) 
+                : new ArrayList<>();
 
         return OrderResponse.builder()
                 .orderId(order.getOrderId())
@@ -108,7 +113,7 @@ public class OrderResponse {
                 .updated(order.getUpdated())
                 .distance(order.getDistance())
                 .duration(order.getDuration())
-                .driverList(order.getDriverList())
+                .driverList(safeDriverList)
                 
                 // Snapshot 데이터 매핑
                 .startLat(s.getStartLat())
