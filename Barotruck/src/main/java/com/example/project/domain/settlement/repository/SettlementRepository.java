@@ -1,6 +1,7 @@
 package com.example.project.domain.settlement.repository;
 
 import com.example.project.domain.settlement.domain.Settlement;
+import com.example.project.domain.settlement.domain.SettlementStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,7 +27,7 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
     List<Settlement> findByDriverUserIdOrderByFeeDateDesc(@Param("driverUserId") Long driverUserId);
 
     // 3. 상태별 정산 목록 조회 (예: READY, COMPLETED)
-    List<Settlement> findByStatus(String status);
+    List<Settlement> findByStatus(SettlementStatus status);
 
     /**
      * [관리자용] 기간별 요약 통계 집계

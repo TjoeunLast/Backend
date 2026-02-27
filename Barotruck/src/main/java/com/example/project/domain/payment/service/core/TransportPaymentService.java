@@ -72,8 +72,8 @@ public class TransportPaymentService {
         return tossPaymentService.confirm(currentUser, orderId, request);
     }
 
-    public void handleTossWebhook(String eventId, String payload) {
-        tossPaymentService.handleWebhook(eventId, payload);
+    public void handleTossWebhook(String eventId, String payload, String webhookSecretHeader) {
+        tossPaymentService.handleWebhook(eventId, payload, webhookSecretHeader);
     }
 }
 

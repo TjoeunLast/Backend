@@ -49,6 +49,12 @@ public class PaymentController {
         return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(page);
     }
 
+    @GetMapping(value = "/toss-live-test", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<Resource> tossLiveTestPage() {
+        Resource page = new ClassPathResource("static/toss-live-test.html");
+        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(page);
+    }
+
     @GetMapping(value = "/admin-test", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<Resource> adminPaymentTestPage() {
         Resource page = new ClassPathResource("static/admin-payment-test.html");
@@ -234,9 +240,10 @@ public class PaymentController {
     @PostMapping("/webhooks/toss")
     public ApiResponse<?> receiveTossWebhook(
             @RequestHeader(value = "Toss-Event-Id", required = false) String eventId,
+            @RequestHeader(value = "Toss-Webhook-Secret", required = false) String webhookSecret,
             @RequestBody String payload
     ) {
-        transportPaymentService.handleTossWebhook(eventId, payload);
+        transportPaymentService.handleTossWebhook(eventId, payload, webhookSecret);
         return ApiResponse.ok(true);
     }
 

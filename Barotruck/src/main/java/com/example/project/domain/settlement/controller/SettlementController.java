@@ -49,7 +49,7 @@ public class SettlementController {
             @PathVariable("orderId") Long orderId,
             @AuthenticationPrincipal Users currentUser
     ) {
-        return ApiResponse.ok(SettlementResponse.from(settlementService.getSettlementForOrder(orderId, currentUser)));
+        return ApiResponse.ok(settlementService.getSettlementForOrder(orderId, currentUser));
     }
 
     @GetMapping("/me")
@@ -58,11 +58,7 @@ public class SettlementController {
             @RequestParam(value = "status", required = false) String status,
             @AuthenticationPrincipal Users currentUser
     ) {
-        return ApiResponse.ok(
-                settlementService.getMySettlements(currentUser, status).stream()
-                        .map(SettlementResponse::from)
-                        .toList()
-        );
+        return ApiResponse.ok(settlementService.getMySettlements(currentUser, status));
     }
 
     @PatchMapping("/orders/{orderId}/complete-by-user")
@@ -71,7 +67,7 @@ public class SettlementController {
             @PathVariable("orderId") Long orderId,
             @AuthenticationPrincipal Users currentUser
     ) {
-        return ApiResponse.ok(SettlementResponse.from(settlementService.completeSettlementByUser(orderId, currentUser)));
+        return ApiResponse.ok(settlementService.completeSettlementByUser(orderId, currentUser));
     }
 
     @GetMapping("/admin/summary")

@@ -29,7 +29,7 @@ public record SettlementResponse(
                 .couponDiscount(settlement.getCouponDiscount())
                 .totalPrice(settlement.getTotalPrice())
                 .feeRate(settlement.getFeeRate())
-                .status(settlement.getStatus())
+                .status(settlement.getStatus() == null ? null : settlement.getStatus().name())
                 .feeDate(settlement.getFeeDate())
                 .feeCompleteDate(settlement.getFeeCompleteDate())
                 .build();

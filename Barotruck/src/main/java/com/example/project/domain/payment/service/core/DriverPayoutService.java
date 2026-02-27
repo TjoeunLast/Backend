@@ -3,11 +3,13 @@ package com.example.project.domain.payment.service.core;
 import com.example.project.domain.payment.domain.DriverPayoutBatch;
 import com.example.project.domain.payment.domain.DriverPayoutItem;
 import com.example.project.domain.payment.domain.TransportPayment;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PayoutStatus;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
 import com.example.project.domain.payment.repository.DriverPayoutItemRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.payment.service.client.DriverPayoutGatewayClient;
+import com.example.project.domain.settlement.domain.SettlementStatus;
 import com.example.project.domain.settlement.repository.SettlementRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +54,9 @@ public class DriverPayoutService {
 
         for (TransportPayment payment : payments) {
             if (payment.getConfirmedAt() == null || payment.getConfirmedAt().toLocalDate().isAfter(payoutDate)) {
+                continue;
+            }
+            if (!isPayoutEligible(payment)) {
                 continue;
             }
             if (payment.getDriverUserId() == null || itemRepository.existsByOrderId(payment.getOrderId())) {
@@ -119,9 +124,19 @@ public class DriverPayoutService {
         return result.isEmpty() ? null : result.get(0);
     }
 
+    private boolean isPayoutEligible(TransportPayment payment) {
+        if (payment.getMethod() == PaymentMethod.TRANSFER) {
+            if (payment.getPgTid() == null || payment.getPgTid().isBlank()) {
+                log.info("skip payout for record-only transfer payment. orderId={}", payment.getOrderId());
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void markSettlementCompletedOnPayout(Long orderId) {
         settlementRepository.findByOrderId(orderId).ifPresentOrElse(settlement -> {
-            settlement.setStatus("COMPLETED");
+            settlement.setStatus(SettlementStatus.COMPLETED);
             if (settlement.getFeeCompleteDate() == null) {
                 settlement.setFeeCompleteDate(LocalDateTime.now());
             }
