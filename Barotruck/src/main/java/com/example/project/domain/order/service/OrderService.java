@@ -363,15 +363,26 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("해당 오더가 존재하지 않습니다."));
 
+        System.out.println("현재 지원자 명단: " + order.getDriverList());
+        System.out.println("내가 선택한 번호: " + selectedDriverNo);
+        
         // 1. 보안 체크: 요청자가 해당 오더의 주인(화주)인지 확인
-        if (!order.getUser().getUserId().equals(currentUserId)) {
+        if (!(order.getUser().getUserId() == currentUserId )) {
             throw new RuntimeException("해당 오더를 관리할 권한이 없습니다.");
         }
 
-        // 2. 상태 체크: 아직 요청 중인 상태인지 확인
-        if (!"REQUESTED".equals(order.getStatus())) {
-            throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다.");
+        System.out.println("22222222222222222222222");
+        
+     // 2. 상태 체크: 공백 제거 및 대소문자 무시 비교로 변경
+        String currentStatus = (order.getStatus() != null) ? order.getStatus().trim() : "";
+        
+        if (!("REQUESTED".equalsIgnoreCase(currentStatus)||("APPLIED".equalsIgnoreCase(currentStatus)) ) ) {
+            System.out.println("실제 상태값 확인: [" + order.getStatus() + "]"); // 디버깅용
+            throw new RuntimeException("이미 배차가 완료되었거나 취소된 오더입니다. 현재 상태: " + order.getStatus());
         }
+        
+        System.out.println("1111111111111111111111");
+        
 
         // 3. 선택한 기사가 신청자 명단에 있는지 확인 및 최종 확정
         // 아까 Order 엔티티에 만들었던 confirmDriver 편의 메서드 활용
@@ -444,7 +455,9 @@ public class OrderService {
         }
         // tag 리스트를 안전하게 복사하여 주입
         List<String> tags = snapshot.getTag() != null ? new ArrayList<>(snapshot.getTag()) : new ArrayList<>();
-
+        List<Long> driverIds = new ArrayList<>(order.getDriverList());
+        
+        
         return OrderResponse.builder()
                 // 1. 주문 기본 정보 및 시스템 지표
                 .orderId(order.getOrderId())
@@ -454,7 +467,7 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
                 .driverNo(order.getDriverNo())
-                .driverList(order.getDriverList())
+                .driverList(driverIds)
 
                 .startLat(snapshot.getStartLat())
                 .startLng(snapshot.getStartLng())
