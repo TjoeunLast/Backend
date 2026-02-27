@@ -64,7 +64,9 @@ public class OrderResponse {
     private String reqTonnage;
     private String driveMode;
     private Long loadWeight;
-
+    private List<Long> driverList;
+    
+    
     // 요금
     private Long basePrice;
     private Long laborFee;
@@ -106,6 +108,8 @@ public class OrderResponse {
                 .updated(order.getUpdated())
                 .distance(order.getDistance())
                 .duration(order.getDuration())
+                .driverList(order.getDriverList())
+                
                 // Snapshot 데이터 매핑
                 .startLat(s.getStartLat())
                 .startLng(s.getStartLng())
