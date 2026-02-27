@@ -1,7 +1,7 @@
 package com.example.project.domain.payment.repository;
 
 import com.example.project.domain.payment.domain.DriverPayoutItem;
-import com.example.project.domain.payment.domain.paymentEnum.PayoutStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PayoutStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

@@ -1,10 +1,10 @@
 package com.example.project.domain.payment.service.core;
 
 import com.example.project.domain.payment.domain.PaymentDispute;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeReason;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeReason;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeStatus;
 import com.example.project.domain.payment.domain.TransportPayment;
-import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
 import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisputeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdatePaymentDisputeStatusRequest;
 import com.example.project.domain.payment.port.OrderPort;

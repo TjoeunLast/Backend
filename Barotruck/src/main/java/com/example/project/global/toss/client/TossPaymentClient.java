@@ -1,4 +1,4 @@
-package com.example.project.domain.payment.service.client;
+package com.example.project.global.toss.client;
 
 import java.math.BigDecimal;
 

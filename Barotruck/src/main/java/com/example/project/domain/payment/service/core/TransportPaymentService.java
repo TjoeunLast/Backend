@@ -2,13 +2,14 @@ package com.example.project.domain.payment.service.core;
 
 import com.example.project.domain.payment.domain.PaymentDispute;
 import com.example.project.domain.payment.domain.TransportPayment;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentTiming;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentTiming;
 import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisputeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossConfirmRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossPrepareRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdatePaymentDisputeStatusRequest;
 import com.example.project.domain.payment.dto.paymentResponse.TossPrepareResponse;
+import com.example.project.global.toss.service.TossPaymentService;
 import com.example.project.member.domain.Users;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
