@@ -1,7 +1,7 @@
 package com.example.project.domain.payment.repository;
 
 import com.example.project.domain.payment.domain.FeeInvoice;
-import com.example.project.domain.payment.domain.paymentEnum.FeeInvoiceStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.FeeInvoiceStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

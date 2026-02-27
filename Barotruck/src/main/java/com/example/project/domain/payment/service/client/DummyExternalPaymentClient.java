@@ -1,6 +1,6 @@
 package com.example.project.domain.payment.service.client;
 
-import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;

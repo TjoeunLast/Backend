@@ -1,8 +1,8 @@
 package com.example.project.domain.payment.dto.paymentResponse;
 
 import com.example.project.domain.payment.domain.PaymentDispute;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeReason;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeReason;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeStatus;
 import lombok.Builder;
 
 import java.time.LocalDateTime;

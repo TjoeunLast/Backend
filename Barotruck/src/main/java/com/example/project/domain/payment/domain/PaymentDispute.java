@@ -1,7 +1,7 @@
 package com.example.project.domain.payment.domain;
 
-import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeReason;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentDisputeStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeReason;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeStatus;
 import jakarta.persistence.*;
 import lombok.*;
 

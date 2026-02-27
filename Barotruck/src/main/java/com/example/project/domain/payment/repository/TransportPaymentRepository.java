@@ -1,7 +1,7 @@
 package com.example.project.domain.payment.repository;
 
 import com.example.project.domain.payment.domain.TransportPayment;
-import com.example.project.domain.payment.domain.paymentEnum.TransportPaymentStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;

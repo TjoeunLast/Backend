@@ -8,7 +8,7 @@ import com.example.project.domain.payment.repository.DriverPayoutItemRepository;
 import com.example.project.domain.payment.repository.FeeInvoiceRepository;
 import com.example.project.domain.payment.repository.PaymentGatewayTransactionRepository;
 import com.example.project.domain.payment.repository.PaymentDisputeRepository;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentProvider;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentProvider;
 import com.example.project.domain.payment.service.core.FeeInvoiceService;
 import com.example.project.domain.payment.service.core.TransportPaymentService;
 import com.example.project.domain.order.repository.OrderRepository;

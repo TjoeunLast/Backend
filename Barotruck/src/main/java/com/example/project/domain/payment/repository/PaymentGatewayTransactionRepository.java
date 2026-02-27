@@ -1,8 +1,8 @@
 package com.example.project.domain.payment.repository;
 
 import com.example.project.domain.payment.domain.PaymentGatewayTransaction;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentProvider;
-import com.example.project.domain.payment.domain.paymentEnum.GatewayTxStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentProvider;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.GatewayTxStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
