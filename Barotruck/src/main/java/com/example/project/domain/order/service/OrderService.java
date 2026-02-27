@@ -454,6 +454,7 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
                 .driverNo(order.getDriverNo())
+                .driverList(order.getDriverList())
 
                 .startLat(snapshot.getStartLat())
                 .startLng(snapshot.getStartLng())
