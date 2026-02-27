@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
         name = "DRIVER_PAYOUT_ITEMS",
         indexes = {
                 @Index(name = "IDX_DRIVER_PAYOUT_ITEM_BATCH_ID", columnList = "BATCH_ID"),
-                @Index(name = "IDX_DRIVER_PAYOUT_ITEM_ORDER_ID", columnList = "ORDER_ID"),
                 @Index(name = "IDX_DRIVER_PAYOUT_ITEM_DRIVER_ID", columnList = "DRIVER_USER_ID"),
                 @Index(name = "IDX_DRIVER_PAYOUT_ITEM_STATUS", columnList = "STATUS")
         },
