@@ -1,7 +1,7 @@
 package com.example.project.domain.payment.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.example.project.domain.payment.domain.paymentEnum.PayoutStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PayoutStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,31 +27,31 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class DriverPayoutItem {
 
-    // 지급 항목 PK
+    // 지급 아이템 PK
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "ITEM_ID")
     private Long itemId;
 
-    // 소속 배치
+    // 지급 배치
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "BATCH_ID", nullable = false)
     @JsonIgnore
     private DriverPayoutBatch batch;
 
-    // 대상 주문 ID
+    // 주문 ID
     @Column(name = "ORDER_ID", nullable = false)
     private Long orderId;
 
-    // 지급 대상 차주 사용자 ID
+    // 차주 사용자 ID
     @Column(name = "DRIVER_USER_ID", nullable = false)
     private Long driverUserId;
 
-    // 차주 실지급 금액
+    // 차주 지급 금액
     @Column(name = "NET_AMOUNT", nullable = false, precision = 18, scale = 2)
     private BigDecimal netAmount;
 
-    // 지급 처리 상태
+    // 지급 상태
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS", nullable = false, length = 20)
     private PayoutStatus status;
@@ -86,7 +86,7 @@ public class DriverPayoutItem {
         }
     }
 
-    // 신규 지급 대기 항목 생성
+    // 지급 준비 상태 생성
     public static DriverPayoutItem ready(DriverPayoutBatch batch, Long orderId, Long driverUserId, BigDecimal netAmount) {
         return DriverPayoutItem.builder()
                 .batch(batch)
@@ -104,7 +104,7 @@ public class DriverPayoutItem {
         this.requestedAt = LocalDateTime.now();
     }
 
-    // 지급 완료 처리
+    // 지급 완료 상태로 변경
     public void markCompleted(String payoutRef) {
         this.status = PayoutStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
@@ -112,7 +112,7 @@ public class DriverPayoutItem {
         this.payoutRef = payoutRef;
     }
 
-    // 지급 실패 처리
+    // 지급 실패 상태로 변경
     public void markFailed(String reason) {
         this.status = PayoutStatus.FAILED;
         this.failureReason = reason;

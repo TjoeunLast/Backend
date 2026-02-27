@@ -1,7 +1,7 @@
 package com.example.project.domain.payment.service.core;
 
 import com.example.project.domain.payment.domain.FeeInvoice;
-import com.example.project.domain.payment.domain.paymentEnum.FeeInvoiceStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.FeeInvoiceStatus;
 import com.example.project.domain.payment.repository.FeeInvoiceRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.payment.service.client.FeeAutoChargeClient;

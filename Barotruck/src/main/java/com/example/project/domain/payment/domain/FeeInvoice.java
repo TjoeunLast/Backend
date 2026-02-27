@@ -1,6 +1,6 @@
 package com.example.project.domain.payment.domain;
 
-import com.example.project.domain.payment.domain.paymentEnum.FeeInvoiceStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.FeeInvoiceStatus;
 import jakarta.persistence.*;
 import lombok.*;
 

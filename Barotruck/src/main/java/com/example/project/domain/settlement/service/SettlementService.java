@@ -1,78 +1,235 @@
 package com.example.project.domain.settlement.service;
 
-import java.time.LocalDateTime;
-
+import com.example.project.domain.order.domain.Order;
+import com.example.project.domain.order.domain.embedded.OrderSnapshot;
+import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.domain.settlement.domain.Settlement;
+import com.example.project.domain.settlement.dto.SettlementRegionStatResponse;
+import com.example.project.domain.settlement.dto.SettlementRequest;
+import com.example.project.domain.settlement.dto.SettlementSummaryResponse;
+import com.example.project.domain.settlement.repository.SettlementRepository;
+import com.example.project.member.domain.Users;
+import com.example.project.security.user.Role;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.project.domain.order.domain.Order;
-import com.example.project.domain.order.repository.OrderRepository;
-import com.example.project.domain.settlement.domain.Settlement;
-import com.example.project.domain.settlement.dto.SettlementRequest;
-import com.example.project.domain.settlement.repository.SettlementRepository;
-import com.example.project.member.domain.Users;
-
-import lombok.RequiredArgsConstructor;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class SettlementService {
 
+    private static final long DEFAULT_FEE_RATE = 10L;
+
     private final SettlementRepository settlementRepository;
     private final OrderRepository orderRepository;
 
     /**
-     * 1. 결제 준비 단계 (화주가 결제창을 열거나 요청했을 때)
+     * 기존 호환용: 정산 초기 생성/갱신
      */
     public void initiateSettlement(SettlementRequest request, Users user) {
+        requireAuthenticated(user);
+
         Order order = orderRepository.findById(request.getOrderId())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주문입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("order not found"));
 
-        // 주문 시점의 스냅샷 가격 정보 가져오기
-        var snapshot = order.getSnapshot();
-        long cargoPrice = snapshot.getBasePrice() + snapshot.getLaborFee() + 
-                         snapshot.getPackagingPrice() + snapshot.getInsuranceFee();
-        
-        long feeRate = 5L; 
-        long platformFee = (cargoPrice * feeRate) / 100;
-        
-        // 최종 결제 금액 계산
-        long totalPrice = cargoPrice + platformFee - request.getCouponDiscount() - request.getLevelDiscount();
+        validateOwnerOrAdmin(order, user);
 
-        
-        
-        Settlement settlement = Settlement.builder()
-                .order(order)
-                .user(user)
-                .levelDiscount(request.getLevelDiscount())
-                .couponDiscount(request.getCouponDiscount())
-                .totalPrice(Math.max(totalPrice, 0L)) // 마이너스 결제 방지
-                .feeRate(10L) // 기본 수수료율 10% 설정
-                .status("READY") // 결제 대기 상태
-                .feeDate(LocalDateTime.now())
-                .build();
+        OrderSnapshot snapshot = order.getSnapshot();
+        if (snapshot == null) {
+            throw new IllegalStateException("order snapshot not found");
+        }
 
-        // Order 엔티티에 정산 정보 연결 (편의 메서드 활용)
+        long cargoPrice =
+                nullSafe(snapshot.getBasePrice())
+                        + nullSafe(snapshot.getLaborFee())
+                        + nullSafe(snapshot.getPackagingPrice())
+                        + nullSafe(snapshot.getInsuranceFee());
+
+        long couponDiscount = nullSafe(request.getCouponDiscount());
+        long levelDiscount = nullSafe(request.getLevelDiscount());
+        long platformFee = (cargoPrice * DEFAULT_FEE_RATE) / 100;
+        long totalPrice = Math.max(cargoPrice + platformFee - couponDiscount - levelDiscount, 0L);
+
+        Settlement settlement = settlementRepository.findByOrderId(order.getOrderId())
+                .orElseGet(() -> Settlement.builder()
+                        .order(order)
+                        .user(user)
+                        .build());
+
+        settlement.setUser(user);
+        settlement.setLevelDiscount(levelDiscount);
+        settlement.setCouponDiscount(couponDiscount);
+        settlement.setTotalPrice(totalPrice);
+        settlement.setFeeRate(DEFAULT_FEE_RATE);
+        settlement.setStatus("READY");
+        if (settlement.getFeeDate() == null) {
+            settlement.setFeeDate(LocalDateTime.now());
+        }
+
         order.setSettlement(settlement);
         settlementRepository.save(settlement);
     }
 
     /**
-     * 2. 결제 완료 승인 (PG사 결제 성공 콜백 또는 최종 확정 시)
+     * 기존 호환용: 인증 검증 없이 완료 처리(기존 호출 경로 유지)
      */
     public void completeSettlement(Long orderId) {
+        completeSettlementInternal(orderId, null);
+    }
+
+    /**
+     * 신규: 권한 검증 포함 완료 처리
+     */
+    public Settlement completeSettlementByUser(Long orderId, Users currentUser) {
+        return completeSettlementInternal(orderId, currentUser);
+    }
+
+    @Transactional(readOnly = true)
+    public Settlement getSettlementForOrder(Long orderId, Users currentUser) {
+        requireAuthenticated(currentUser);
+        Settlement settlement = settlementRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("settlement not found. orderId=" + orderId));
+        validateReadPermission(settlement, currentUser);
+        return settlement;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Settlement> getMySettlements(Users currentUser, String status) {
+        requireAuthenticated(currentUser);
+
+        List<Settlement> base;
+        if (currentUser.getRole() == Role.ADMIN) {
+            base = settlementRepository.findAll();
+        } else if (currentUser.getRole() == Role.SHIPPER) {
+            base = settlementRepository.findByUser_UserIdOrderByFeeDateDesc(currentUser.getUserId());
+        } else if (currentUser.getRole() == Role.DRIVER) {
+            base = settlementRepository.findByDriverUserIdOrderByFeeDateDesc(currentUser.getUserId());
+        } else {
+            throw new IllegalStateException("unsupported role for settlement view");
+        }
+
+        if (status == null || status.isBlank()) {
+            return base;
+        }
+
+        String normalizedStatus = status.trim();
+        return base.stream()
+                .filter(s -> s.getStatus() != null && s.getStatus().equalsIgnoreCase(normalizedStatus))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public SettlementSummaryResponse getSettlementSummary(LocalDateTime start, LocalDateTime end) {
+        Object[] row = settlementRepository.getSettlementSummary(start, end);
+        if (row == null || row.length < 4) {
+            return SettlementSummaryResponse.builder()
+                    .totalAmount(0L)
+                    .platformRevenue(0L)
+                    .totalDiscount(0L)
+                    .count(0L)
+                    .build();
+        }
+        return SettlementSummaryResponse.builder()
+                .totalAmount(toLong(row[0]))
+                .platformRevenue(toLong(row[1]))
+                .totalDiscount(toLong(row[2]))
+                .count(toLong(row[3]))
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SettlementRegionStatResponse> getSettlementRegionStats(LocalDateTime start, LocalDateTime end) {
+        return settlementRepository.getSettlementStatsByRegion(start, end).stream()
+                .map(row -> SettlementRegionStatResponse.builder()
+                        .province(row[0] == null ? null : String.valueOf(row[0]))
+                        .totalAmount(toLong(row[1]))
+                        .count(toLong(row[2]))
+                        .build())
+                .toList();
+    }
+
+    private Settlement completeSettlementInternal(Long orderId, Users currentUser) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다."));
+                .orElseThrow(() -> new IllegalArgumentException("order not found. orderId=" + orderId));
 
-        Settlement settlement = order.getSettlement();
-        if (settlement == null) throw new IllegalStateException("정산 정보가 없습니다.");
+        if (currentUser != null) {
+            requireAuthenticated(currentUser);
+            validateOwnerOrAdmin(order, currentUser);
+        }
 
-        // 정산 상태 업데이트
+        Settlement settlement = settlementRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalStateException("settlement not found. orderId=" + orderId));
+
         settlement.setStatus("COMPLETED");
         settlement.setFeeCompleteDate(LocalDateTime.now());
 
-        // 오더 상태를 완료(COMPLETED)로 변경
-        order.changeStatus("COMPLETED");
+        if (!"COMPLETED".equalsIgnoreCase(order.getStatus())) {
+            order.changeStatus("COMPLETED");
+        }
+
+        return settlementRepository.save(settlement);
+    }
+
+    private void validateReadPermission(Settlement settlement, Users currentUser) {
+        if (currentUser.getRole() == Role.ADMIN) {
+            return;
+        }
+
+        Long currentUserId = currentUser.getUserId();
+        if (currentUser.getRole() == Role.SHIPPER) {
+            Long ownerId = settlement.getUser() != null ? settlement.getUser().getUserId() : null;
+            if (ownerId != null && ownerId.equals(currentUserId)) {
+                return;
+            }
+        }
+
+        if (currentUser.getRole() == Role.DRIVER) {
+            Long driverUserId = settlement.getOrder() != null ? settlement.getOrder().getDriverNo() : null;
+            if (driverUserId != null && driverUserId.equals(currentUserId)) {
+                return;
+            }
+        }
+
+        throw new IllegalStateException("forbidden settlement access");
+    }
+
+    private void validateOwnerOrAdmin(Order order, Users currentUser) {
+        if (currentUser.getRole() == Role.ADMIN) {
+            return;
+        }
+        Long ownerId = order.getUser() != null ? order.getUser().getUserId() : null;
+        if (currentUser.getRole() == Role.SHIPPER && ownerId != null && ownerId.equals(currentUser.getUserId())) {
+            return;
+        }
+        throw new IllegalStateException("only owner shipper or admin can handle settlement");
+    }
+
+    private void requireAuthenticated(Users user) {
+        if (user == null || user.getUserId() == null) {
+            throw new IllegalStateException("authentication required");
+        }
+    }
+
+    private long nullSafe(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private long toLong(Object value) {
+        if (value == null) {
+            return 0L;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
     }
 }

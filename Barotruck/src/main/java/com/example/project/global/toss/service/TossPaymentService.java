@@ -1,18 +1,19 @@
-package com.example.project.domain.payment.service.core;
+package com.example.project.global.toss.service;
 
-import com.example.project.domain.payment.domain.paymentEnum.GatewayTxStatus;
-import com.example.project.domain.payment.domain.paymentEnum.PayChannel;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.GatewayTxStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PayChannel;
 import com.example.project.domain.payment.domain.PaymentGatewayTransaction;
 import com.example.project.domain.payment.domain.PaymentGatewayWebhookEvent;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentMethod;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentProvider;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentProvider;
 import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.dto.paymentRequest.TossConfirmRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossPrepareRequest;
 import com.example.project.domain.payment.dto.paymentResponse.TossPrepareResponse;
 import com.example.project.domain.payment.port.OrderPort;
 import com.example.project.domain.payment.repository.PaymentGatewayTransactionRepository;
-import com.example.project.domain.payment.service.client.TossPaymentClient;
+import com.example.project.domain.payment.service.core.PaymentLifecycleService;
+import com.example.project.global.toss.client.TossPaymentClient;
 import com.example.project.member.domain.Users;
 import com.example.project.security.user.Role;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -379,5 +380,6 @@ public class TossPaymentService {
         }
     }
 }
+
 
 

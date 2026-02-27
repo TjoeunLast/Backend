@@ -1,6 +1,6 @@
 package com.example.project.domain.payment.domain;
 
-import com.example.project.domain.payment.domain.paymentEnum.PaymentProvider;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentProvider;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -56,7 +56,7 @@ public class PaymentGatewayWebhookEvent {
     @Column(name = "PROCESSED_AT")
     private LocalDateTime processedAt;
 
-    // 처리 결과 코드/메시지
+    // 처리 결과
     @Column(name = "PROCESS_RESULT", length = 200)
     private String processResult;
 
@@ -67,7 +67,7 @@ public class PaymentGatewayWebhookEvent {
         }
     }
 
-    // 처리 완료 마킹
+    // 처리 완료 표시
     public void markProcessed(String result) {
         this.processResult = result;
         this.processedAt = LocalDateTime.now();

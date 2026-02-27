@@ -1,6 +1,6 @@
 package com.example.project.domain.payment.domain;
 
-import com.example.project.domain.payment.domain.paymentEnum.PayoutStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PayoutStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,11 +27,11 @@ public class DriverPayoutBatch {
     @Column(name = "BATCH_ID")
     private Long batchId;
 
-    // 배치 기준 일자(정산일)
+    // 배치 기준일
     @Column(name = "BATCH_DATE", nullable = false)
     private LocalDate batchDate;
 
-    // 배치 처리 상태
+    // 배치 상태
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS", nullable = false, length = 20)
     private PayoutStatus status;
@@ -67,14 +67,14 @@ public class DriverPayoutBatch {
                 .build();
     }
 
-    // 배치 성공 완료 처리
+    // 배치 완료 상태로 변경
     public void markCompleted() {
         this.status = PayoutStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
         this.failureReason = null;
     }
 
-    // 배치 실패 처리
+    // 배치 실패 상태로 변경
     public void markFailed(String reason) {
         this.status = PayoutStatus.FAILED;
         this.completedAt = LocalDateTime.now();

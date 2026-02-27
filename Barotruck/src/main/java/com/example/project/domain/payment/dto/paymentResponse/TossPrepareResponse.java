@@ -1,6 +1,6 @@
 package com.example.project.domain.payment.dto.paymentResponse;
 
-import com.example.project.domain.payment.domain.paymentEnum.PaymentProvider;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentProvider;
 import lombok.Builder;
 import lombok.Getter;
 

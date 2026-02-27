@@ -19,6 +19,12 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
     // 2. 특정 사용자의 정산 내역 조회 (최신순)
     List<Settlement> findByUser_UserIdOrderByFeeDateDesc(Long userId);
 
+    @Query("SELECT s " +
+           "FROM Settlement s JOIN s.order o " +
+           "WHERE o.driverNo = :driverUserId " +
+           "ORDER BY s.feeDate DESC")
+    List<Settlement> findByDriverUserIdOrderByFeeDateDesc(@Param("driverUserId") Long driverUserId);
+
     // 3. 상태별 정산 목록 조회 (예: READY, COMPLETED)
     List<Settlement> findByStatus(String status);
 
