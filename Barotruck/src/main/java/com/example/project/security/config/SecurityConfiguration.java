@@ -34,6 +34,7 @@ public class SecurityConfiguration {
     private static final String[] WHITE_LIST_URL = {
             "/api/v1/auth/**",
             "/api/auth/**",
+            "/error",
             "/api/v1/admin/orders/**",
             "/v3/api-docs/**",
             "/swagger-resources",
@@ -75,7 +76,7 @@ public class SecurityConfiguration {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                //.cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable) // REST API이므로 CSRF 비활성화
                 .authorizeHttpRequests(req ->
                         req.requestMatchers(WHITE_LIST_URL).permitAll() // 화이트리스트 허용
@@ -86,14 +87,15 @@ public class SecurityConfiguration {
                                 .requestMatchers("/api/ocr/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/notices/**").permitAll() // 공지는 누구나 조회 가능
                                 .requestMatchers("/api/admin/**").hasRole("ADMIN") // 관리자 전용 API
-
+                                
                                 // ★ 중요: 채팅과 공구 관련 API는 반드시 인증(Token) 필요
                                 // 이렇게 설정해야 @AuthenticationPrincipal에 데이터가 정상적으로 들어옵니다.
                                 .requestMatchers("/api/chat/**").authenticated()
                                 .requestMatchers("/api/user/**").authenticated() // 유저 정보 관련 추가
                                 .requestMatchers("/api/**").permitAll()
-
                                 .anyRequest().authenticated() // 그 외 모든 요청은 인증 필요
+         
+      
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(STATELESS)) // 세션 미사용
                 .authenticationProvider(authenticationProvider)
@@ -110,37 +112,37 @@ public class SecurityConfiguration {
         return http.build();
     }
 
-//    @Bean
-//    public CorsConfigurationSource corsConfigurationSource() {
-//
-//        CorsConfiguration config = new CorsConfiguration();
-//
-//        // ⭐ 리액트 주소
-//        config.setAllowedOrigins(List.of("http://localhost:3000"));
-//
-//        // 허용 메서드
-//        config.setAllowedMethods(List.of(
-//                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
-//        ));
-//
-//        // ⭐ Authorization 반드시 포함
-//        config.setAllowedHeaders(List.of(
-//                "Authorization",
-//                "Content-Type",
-//                "Cache-Control"
-//        ));
-//
-//        // 쿠키 쓸 경우 true
-//        config.setAllowCredentials(true);
-//
-//        // 모든 응답 헤더 노출
-//        config.setExposedHeaders(List.of("Authorization"));
-//
-//        UrlBasedCorsConfigurationSource source =
-//                new UrlBasedCorsConfigurationSource();
-//
-//        source.registerCorsConfiguration("/**", config);
-//
-//        return source;
-//    }
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+
+        CorsConfiguration config = new CorsConfiguration();
+
+        // ⭐ 리액트 주소
+        config.setAllowedOrigins(List.of("http://localhost:3000"));
+
+        // 허용 메서드
+        config.setAllowedMethods(List.of(
+                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
+        ));
+
+        // ⭐ Authorization 반드시 포함
+        config.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Cache-Control"
+        ));
+
+        // 쿠키 쓸 경우 true
+        config.setAllowCredentials(true);
+
+        // 모든 응답 헤더 노출
+        config.setExposedHeaders(List.of("Authorization"));
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration("/**", config);
+
+        return source;
+    }
 }

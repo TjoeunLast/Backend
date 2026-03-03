@@ -1,6 +1,9 @@
 package com.example.project.member.service;
 
+import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.member.domain.Users;
 import com.example.project.member.dto.AdminUserResponse;
+import com.example.project.member.dto.AdminUserResponse.AdminUserDetailResponse;
 import com.example.project.member.repository.UsersRepository;
 import com.example.project.security.user.Role;
 import lombok.RequiredArgsConstructor;
@@ -14,9 +17,10 @@ import java.util.List;
 public class AdminUserService {
 
     private final UsersRepository repository;
-
+    private final OrderRepository orderRepository; // ✅ 주문/운행 레포지토리 주입
+    
     @Transactional(readOnly = true)
-        public List<AdminUserResponse> getAdminUserList(Role role) {
+    public List<AdminUserResponse> getAdminUserList(Role role) {
         var sort = org.springframework.data.domain.Sort.by(
             org.springframework.data.domain.Sort.Direction.DESC,
             "enrolldate"
@@ -31,9 +35,15 @@ public class AdminUserService {
 
     @Transactional(readOnly = true)
     public AdminUserResponse.AdminUserDetailResponse getAdminUserDetail(Long userId) {
-        var user = repository.findById(userId)
+    	// 1. 회원 조회 (중복 로직 제거 및 올바른 필드명 'repository' 사용)
+        Users user = repository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 유저를 찾을 수 없습니다."));
-        return AdminUserResponse.AdminUserDetailResponse.from(user);
+        
+     // 2. 해당 유저의 누적 운행 건수를 DB에서 카운트
+        // (OrderRepository에 해당 메서드가 정의되어 있어야 합니다.)
+        Long totalCount = orderRepository.countByDriverNoAndStatus(userId, "COMPLETED");
+        
+        return AdminUserResponse.AdminUserDetailResponse.from(user, totalCount);
     }
 
     @Transactional

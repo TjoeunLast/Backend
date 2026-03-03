@@ -11,6 +11,7 @@ import com.example.project.domain.settlement.dto.SettlementResponse;
 import com.example.project.domain.settlement.dto.SettlementSummaryResponse;
 import com.example.project.domain.settlement.repository.SettlementRepository;
 import com.example.project.member.domain.Users;
+import com.example.project.member.repository.UsersRepository;
 import com.example.project.security.user.Role;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ public class SettlementService {
 
     private final SettlementRepository settlementRepository;
     private final OrderRepository orderRepository;
+    private final UsersRepository usersRepository; // 1. 추가: 유저 조회를 위해 필요
 
     /**
      * 정산 데이터 초기 생성/갱신
@@ -252,11 +254,47 @@ public class SettlementService {
     }
 
     private SettlementResponse toResponse(Settlement settlement) {
+    	// 차주 ID(driverNo) 추출
+        Long driverNo = settlement.getOrder() != null ? settlement.getOrder().getDriverNo() : null;
+        
+        // 2. 차주 이름 조회 로직 추가
+        String driverName = "미지정";
+        String bankName = null;
+        String accountNum = null;
+
+        String shipperName = "미지정";
+        String bizNumber = "정보 없음";
+        
+        // 람다 제약 문제를 피하기 위해 Optional을 직접 처리합니다.
+        if (driverNo != null) {
+            Users driverUser = usersRepository.findById(driverNo).orElse(null);
+            if (driverUser != null) {
+                driverName = driverUser.getName();
+                // Driver 엔티티와 1:1 관계인 경우 정보를 가져옵니다.
+                if (driverUser.getDriver() != null) {
+                    bankName = driverUser.getDriver().getBankName();
+                    accountNum = driverUser.getDriver().getAccountNum();
+                }
+            }
+        }
+        
+        Users shipperUser = settlement.getUser(); // 정산 객체에 연결된 화주 유저
+        if (shipperUser != null && shipperUser.getShipper() != null) {
+            // Shipper 엔티티에서 회사명과 사업자 번호를 가져옵니다.
+            shipperName = shipperUser.getShipper().getCompanyName(); 
+            bizNumber = shipperUser.getShipper().getBizRegNum();
+        }
+        
         return SettlementResponse.builder()
                 .settlementId(settlement.getId())
                 .orderId(settlement.getOrder() != null ? settlement.getOrder().getOrderId() : null)
                 .shipperUserId(settlement.getUser() != null ? settlement.getUser().getUserId() : null)
                 .driverUserId(settlement.getOrder() != null ? settlement.getOrder().getDriverNo() : null)
+                .driverName(driverName)
+                .bankName(bankName)       // 빌더에 추가
+                .accountNum(accountNum)   // 빌더에 추가
+                .shipperName(shipperName)
+                .bizNumber(bizNumber)
                 .levelDiscount(settlement.getLevelDiscount())
                 .couponDiscount(settlement.getCouponDiscount())
                 .totalPrice(settlement.getTotalPrice())
