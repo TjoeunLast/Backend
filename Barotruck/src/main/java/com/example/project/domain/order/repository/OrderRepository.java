@@ -30,6 +30,9 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
        // 특정 상태 리스트에 포함된 오더 조회 (예: 모든 취소 상태)
        List<Order> findByStatusInOrderByCreatedAtDesc(List<String> statuses);
 
+       // 특정 차주의 특정 상태(완료)인 운행 건수를 카운트
+       Long countByDriverNoAndStatus(Long driverNo, String status);
+       
        // 1. 상태별 오더 개수 (대시보드 현황판용)
        long countByStatus(String status);
 

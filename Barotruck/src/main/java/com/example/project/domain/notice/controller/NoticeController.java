@@ -35,7 +35,7 @@ public class NoticeController {
 
     // 추가: 공지사항 상세 조회 (누구나 가능)
     @GetMapping("/{id}")
-    public ResponseEntity<NoticeResponse> detail(@PathVariable Long id) {
+    public ResponseEntity<NoticeResponse> detail(@PathVariable("id") Long id) {
         return ResponseEntity.ok(noticeService.getNoticeDetail(id));
     }
 
@@ -52,7 +52,7 @@ public class NoticeController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> update(
-    		@PathVariable Long id, 
+    		@PathVariable("id") Long id, 
     		@RequestBody NoticeRequest request
     		) {
         noticeService.updateNotice(id, request);
@@ -63,7 +63,7 @@ public class NoticeController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(
-    		@PathVariable Long id) {
+    		@PathVariable("id") Long id) {
         noticeService.deleteNotice(id);
         return ResponseEntity.ok().build();
     }
