@@ -306,7 +306,7 @@ public class OrderService {
         );
 
         // 리포지토리를 통해 해당 차주 ID와 상태 목록에 해당하는 오더 조회
-        return orderRepository.findByDriverNoAndStatusIn(driverId, drivingStatuses)
+        return orderRepository.findMyDrivingAndAppliedOrders(driverId, drivingStatuses)
                 .stream()
                 .map(order -> convertToResponse(order, driverId)) // 엔티티 -> DTO 변환
                 .collect(Collectors.toList());
