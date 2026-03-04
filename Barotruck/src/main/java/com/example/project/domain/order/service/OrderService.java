@@ -112,6 +112,12 @@ public class OrderService {
     public List<OrderResponse> getAvailableOrders() {
         String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
         List<Order> orders = orderRepository.findAvailableOrders("REQUESTED", now);
+        
+        System.out.println(orders);
+        
+        for(int i=0; i<orders.size(); i++) {
+        	System.out.println(orders.indexOf(i));
+        }
 
         return orders.stream()
                 .map(this::convertToResponse)

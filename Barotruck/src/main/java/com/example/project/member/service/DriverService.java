@@ -49,6 +49,7 @@ public class DriverService {
                 .type(request.getType())
                 .isSuspended(driver.getIsSuspended() == null ? "N" : driver.getIsSuspended()) // 기본값 유지
                 .user(user)
+                .address(request.getAddress())
                 .build();
 
         driverRepository.save(updatedDriver);

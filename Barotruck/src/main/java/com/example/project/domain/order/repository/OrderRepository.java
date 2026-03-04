@@ -24,7 +24,14 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
        List<Order> findByUserOrderByCreatedAtDesc(Users user);
 
        // 차주: 현재 매칭 대기 중인(REQUESTED) 전체 오더 조회
-       @Query("SELECT o FROM Order o JOIN o.snapshot s WHERE o.status = :status AND (s.startSchedule > :now OR s.startSchedule IS NULL) ORDER BY o.createdAt DESC")
+       @Query(value = "SELECT * FROM orders " +
+               "WHERE status = :status " +
+               "  AND ( " +
+               "    TO_DATE(start_schedule, 'YYYY-MM-DD HH24:MI') > TO_DATE(:now, 'YYYY-MM-DD HH24:MI') " +
+               "    OR start_schedule IS NULL " +
+               "  ) " +
+               "ORDER BY created_at DESC", 
+       nativeQuery = true)
        List<Order> findAvailableOrders(@Param("status") String status, @Param("now") String now);
 
        // 특정 상태 리스트에 포함된 오더 조회 (예: 모든 취소 상태)
