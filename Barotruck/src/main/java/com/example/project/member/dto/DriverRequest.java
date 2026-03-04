@@ -24,4 +24,7 @@ public class DriverRequest {
     private String bankName;
     private String accountNum;
     private String type; // 냉장, 냉동 등
+    
+    private Long nbhId;
+    private String address;
 }
