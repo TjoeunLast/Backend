@@ -178,5 +178,9 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
                      @Param("driverNo") Long driverNo,
                      @Param("start") LocalDateTime start,
                      @Param("end") LocalDateTime end);
+       
+       // 승인대기 상태를 위한 유림 추가
+       @Query("SELECT o FROM Order o LEFT JOIN o.driverList d WHERE (o.driverNo = :driverId OR d = :driverId) AND o.status IN :statuses")
+       List<Order> findMyDrivingAndAppliedOrders(@Param("driverId") Long driverId, @Param("statuses") List<String> statuses);
 
 }
