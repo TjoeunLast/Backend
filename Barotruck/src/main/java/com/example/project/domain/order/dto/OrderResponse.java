@@ -107,9 +107,7 @@ public class OrderResponse {
                 .status(order.getStatus())
 
                 // 매필 로직 추가 정산
-                .settlementStatus(order.getSettlement() != null && order.getSettlement().getStatus() != null
-                        ? order.getSettlement().getStatus().name()
-                        : "READY")
+                .settlementStatus(order.getSettlement() != null ? order.getSettlement().getStatus() : "READY")
                 .driverNo(order.getDriverNo())
                 .createdAt(order.getCreatedAt())
                 .updated(order.getUpdated())
@@ -145,7 +143,7 @@ public class OrderResponse {
                 .payMethod(s.getPayMethod())
                 .instant(s.isInstant())
                 .memo(s.getMemo())
-                .tag(s.getTag() == null ? new ArrayList<>() : new ArrayList<>(s.getTag()))
+                .tag(s.getTag())
                 .startNbhId(s.getStartNbhId())
                 .endNbhId(s.getEndNbhId())
                 // 요약 정보
