@@ -3,8 +3,7 @@ package com.example.project.domain.order.domain.embedded;
 import java.math.BigDecimal;
 import java.util.List;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Embeddable;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -62,7 +61,10 @@ public class OrderSnapshot {
 
     // 메모 및 태그
     private String memo;
+
+    @Transient
     private List<String> tag;
 
     private boolean instant;
+
 }

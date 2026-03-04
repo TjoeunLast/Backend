@@ -46,8 +46,8 @@ public class AuthenticationService {
 	private final DriverRepository driversRepository;
 	private final NeighborhoodService neighborhoodService; // 추가
 	private final EmailAuthService emailAuthService; // 기존에 만든 이메일 서비스 활용
-	
-	
+
+
 	/**
 	 * 회원가입 처리
 	 */
@@ -58,6 +58,7 @@ public class AuthenticationService {
 		}
 		// 회원 엔티티 생성
 		var user = Users.builder()
+				.name(request.getName())   // 추가
 				.nickname(request.getNickname())
 				.email(request.getEmail())
 				.password(passwordEncoder.encode(request.getPassword()))
@@ -73,6 +74,7 @@ public class AuthenticationService {
 			Shipper shipper = Shipper.builder()
 					.companyName(sDto.getCompanyName())
 					.bizRegNum(sDto.getBizRegNum())
+					.isCorporate(sDto.getIsCorporate()) // Y: 사업자, N: 개인화주
 					.user(user)
 					.build();
 			user.setShipper(shipper);
@@ -98,7 +100,7 @@ public class AuthenticationService {
 					.build();
 			user.setDriver(driver);
 		}
-		
+
 		try {
 			// 사용자 저장 (여기서 유니크 제약조건 위반 시 예외 발생 가능)
 			var savedUser = repository.save(user);
@@ -276,31 +278,31 @@ public class AuthenticationService {
 			throw e;
 		}
 	}
-	
-	
+
+
 	// 7. 이메일 찾기 로직
 	public String findEmailByNameAndPhone(String name, String phone) {
-	    return repository.findByNameAndPhone(name, phone) // 이제 에러가 사라집니다.
-	            .map(Users::getEmail)
-	            .orElseThrow(() -> new RuntimeException("일치하는 회원 정보를 찾을 수 없습니다."));
+		return repository.findByNameAndPhone(name, phone) // 이제 에러가 사라집니다.
+				.map(Users::getEmail)
+				.orElseThrow(() -> new RuntimeException("일치하는 회원 정보를 찾을 수 없습니다."));
 	}
 
-    // 8. 비밀번호 재설정 로직
-    @Transactional
-    public void resetPassword(PasswordResetRequest request) {
-        // 1. 이메일 인증번호 검증 (이미 만들어둔 emailAuthService 활용)
-        boolean isVerified = emailAuthService.verifyCode(request.getEmail(), request.getCode());
-        
-        if (!isVerified) {
-            throw new RuntimeException("인증번호가 일치하지 않거나 만료되었습니다.");
-        }
+	// 8. 비밀번호 재설정 로직
+	@Transactional
+	public void resetPassword(PasswordResetRequest request) {
+		// 1. 이메일 인증번호 검증 (이미 만들어둔 emailAuthService 활용)
+		boolean isVerified = emailAuthService.verifyCode(request.getEmail(), request.getCode());
 
-        // 2. 비밀번호 변경
-        Users user = repository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
-        
-        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        repository.save(user);
-    }
+		if (!isVerified) {
+			throw new RuntimeException("인증번호가 일치하지 않거나 만료되었습니다.");
+		}
+
+		// 2. 비밀번호 변경
+		Users user = repository.findByEmail(request.getEmail())
+				.orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+
+		user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+		repository.save(user);
+	}
 
 }
