@@ -97,24 +97,18 @@ public class OrderService {
         } else {
             order.addToDriverList(driverNo);
         }
-
-        if (order.getSnapshot().isInstant()) {
-            order.assignDriver(driverNo, "ACCEPTED");
-        } else {
-            order.addToDriverList(driverNo);
-        }
     }
 
     /**
      * 3. 차주: 수락 가능한 오더 목록 조회
      */
     @Transactional(readOnly = true)
-    public List<OrderResponse> getAvailableOrders() {
+    public List<OrderResponse> getAvailableOrders(Long userId) {
         String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
         List<Order> orders = orderRepository.findAvailableOrders("REQUESTED", now);
 
         return orders.stream()
-                .map(this::convertToResponse)
+        		.map(order -> convertToResponse(order, userId))
                 .collect(Collectors.toList());
     }
 
@@ -201,10 +195,15 @@ public class OrderService {
         // 1. 상태별 취소 가능 여부 체크
         validateCancelCondition(order, role);
 
-        // 2. [수정 및 추가 로직]
-        if ("DRIVER".equals(role)) {
-            // 차주가 취소한 경우: 다른 기사가 잡을 수 있게 초기화
-            // 기존에 만들어둔 assignDriver 편의 메서드를 활용해 status를 REQUESTED로, driverNo를 null로 변경
+        // 2. 역할에 따른 취소 처리 방식 분리
+        if ("APPLICANT".equals(role)) {
+            // 승인 대기 상태에서 취소: 지원자 명단에서만 내 이름 지우기
+            order.getDriverList().remove(currentUser.getUserId());
+            orderRepository.save(order);
+            return; // 오더 자체가 취소되는 것은 아니므로 여기서 메서드 종료
+            
+        } else if ("DRIVER".equals(role)) {
+            // 이미 확정된 기사가 취소: 오더를 다시 REQUESTED로 초기화
             order.assignDriver(null, "REQUESTED");
         } else {
             // 화주나 관리자가 취소한 경우: 아예 종료 상태로 변경
@@ -231,6 +230,12 @@ public class OrderService {
             return "USER";
         if (order.getDriverNo() != null && order.getDriverNo().equals(user.getUserId()))
             return "DRIVER";
+        
+        // 배차 신청만 한 상태
+        if (order.getDriverList().contains(user.getUserId()))
+            return "APPLICANT";
+
+        
         throw new RuntimeException("취소 권한이 없습니다.");
     }
 
@@ -303,7 +308,7 @@ public class OrderService {
         // 리포지토리를 통해 해당 차주 ID와 상태 목록에 해당하는 오더 조회
         return orderRepository.findByDriverNoAndStatusIn(driverId, drivingStatuses)
                 .stream()
-                .map(OrderResponse::from) // 엔티티 -> DTO 변환
+                .map(order -> convertToResponse(order, driverId)) // 엔티티 -> DTO 변환
                 .collect(Collectors.toList());
     }
 
@@ -329,7 +334,7 @@ public class OrderService {
 
         // 3. 응답 변환
         return recommendedOrders.stream()
-                .map(OrderResponse::from)
+        		.map(order -> convertToResponse(order, userId))
                 .collect(Collectors.toList());
     }
 
@@ -361,7 +366,7 @@ public class OrderService {
         // 기존의 맞춤형 오더 조회 쿼리 재사용 (차종/톤수 필터 + 지역 필터)
         return orderRepository.findCustomOrders(driver.getCarType(), driver.getTonnage(), now)
                 .stream()
-                .map(this::convertToResponse)
+                .map(order -> convertToResponse(order, user.getUserId()))
                 .collect(Collectors.toList());
     }
 
@@ -399,7 +404,7 @@ public class OrderService {
         // 리포지토리에서 화주 ID로 조회 (최신순 정렬은 레포지토리 메서드 명으로 처리)
         return orderRepository.findByUser_UserIdOrderByCreatedAtDesc(userId)
                 .stream()
-                .map(this::convertToResponse) // 기존에 작성된 DTO 변환 메서드 활용
+                .map(order -> convertToResponse(order, userId))
                 .collect(Collectors.toList());
     }
 
@@ -509,6 +514,24 @@ public class OrderService {
                 .cancellation(OrderResponse.CancellationSummary.from(order.getCancellationInfo()))
                 .user(OrderResponse.UserSummary.from(order.getUser()))
                 .build();
+    }
+    
+    // [유림 추가] 기존 로직을 유지하면서 현재 사용자의 신청 여부를 체크하여 상태를 변조하는 메서드
+    private OrderResponse convertToResponse(Order order, Long currentUserId) {
+        // 1. 지연 로딩 방지: 지원자 명단을 확실하게 불러옵니다.
+        if (order.getDriverList() != null) {
+            order.getDriverList().size();
+        }
+
+        // 2. 기존 팀원이 만든 메서드를 호출하여 기본 정보를 세팅합니다.
+        OrderResponse res = convertToResponse(order);
+        if (res == null) return null;
+
+        // 3. 만약 내가 신청한 오더라면 상태를 APPLIED로 바꿉니다.
+        if ("REQUESTED".equals(res.getStatus()) && currentUserId != null && order.getDriverList().contains(currentUserId)) {
+            res.setStatus("APPLIED");
+        }
+        return res;
     }
 
 }
