@@ -51,8 +51,8 @@ public class OrderController {
 
     // 차주: 배차 대기 중인 오더 목록 조회 (반환 타입을 List<OrderResponse>로 변경)
     @GetMapping("/available")
-    public ResponseEntity<List<OrderResponse>> getAvailableOrders() {
-        return ResponseEntity.ok(orderService.getAvailableOrders());
+    public ResponseEntity<List<OrderResponse>> getAvailableOrders(@AuthenticationPrincipal Users user) {
+        return ResponseEntity.ok(orderService.getAvailableOrders(user.getUserId()));
     }
 
     /**

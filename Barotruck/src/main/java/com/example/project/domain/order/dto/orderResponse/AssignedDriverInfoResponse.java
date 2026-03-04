@@ -22,6 +22,7 @@ public class AssignedDriverInfoResponse {
     private String carNum;
     private String carType;
     private BigDecimal tonnage;
+    private Long career;
 
     public static AssignedDriverInfoResponse from(Users user, Driver driver) {
         return AssignedDriverInfoResponse.builder()
@@ -32,6 +33,7 @@ public class AssignedDriverInfoResponse {
                 .carNum(driver.getCarNum())
                 .carType(driver.getCarType())
                 .tonnage(driver.getTonnage())
+                .career(driver.getCareer())
                 .build();
     }
 }
