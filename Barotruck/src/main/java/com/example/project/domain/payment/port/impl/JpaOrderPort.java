@@ -107,6 +107,18 @@ public class JpaOrderPort implements OrderPort {
         updateStatusForPaymentFlow(order, "CONFIRMED");
     }
 
+    /**
+     * 토스 결제처럼 차주 확인 없이 즉시 완료 처리하는 결제 흐름에서 사용.
+     */
+    @Override
+    @Transactional
+    public void setOrderCompleted(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("order not found: " + orderId));
+
+        updateStatusForPaymentFlow(order, "COMPLETED");
+    }
+
 
     /**
      * 주문 상태를 DISPUTED로 변경

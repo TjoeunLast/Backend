@@ -170,22 +170,32 @@ public class PaymentLifecycleService {
         if (payment.getStatus() == TransportPaymentStatus.CANCELLED) {
             throw new IllegalStateException("cannot mark paid for cancelled payment");
         }
-        if (payment.getStatus() == TransportPaymentStatus.PAID
-                || payment.getStatus() == TransportPaymentStatus.CONFIRMED
+        if (payment.getStatus() == TransportPaymentStatus.CONFIRMED
                 || payment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED
                 || payment.getStatus() == TransportPaymentStatus.DISPUTED
                 || payment.getStatus() == TransportPaymentStatus.ADMIN_HOLD
                 || payment.getStatus() == TransportPaymentStatus.ADMIN_REJECTED) {
             return payment;
         }
+        if (payment.getStatus() == TransportPaymentStatus.PAID) {
+            payment.confirm(LocalDateTime.now());
+            orderPort.setOrderCompleted(tx.getOrderId());
+
+            TransportPayment saved = transportPaymentRepository.save(payment);
+            upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), tx.getAmount(), fee);
+            completeSettlementOnConfirm(tx.getOrderId());
+            return saved;
+        }
 
         String pgReference = firstNonBlank(tx.getTransactionId(), tx.getPaymentKey(), tx.getPgOrderId());
         payment.markPaid(pgReference, LocalDateTime.now());
         payment.setPgTid(pgReference);
-        orderPort.setOrderPaid(tx.getOrderId());
+        payment.confirm(LocalDateTime.now());
+        orderPort.setOrderCompleted(tx.getOrderId());
 
         TransportPayment saved = transportPaymentRepository.save(payment);
         upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), tx.getAmount(), fee);
+        completeSettlementOnConfirm(tx.getOrderId());
         return saved;
     }
 
