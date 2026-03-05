@@ -6,6 +6,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -270,7 +271,8 @@ public class OrderService {
         }
 
         // [알림 발송]
-        String statusMessage = convertStatusToMessage(newStatus); // 상태별 메시지 변환 메서드 활용 권장
+        String normalizedStatus = normalizeDrivingStatus(newStatus);
+        String statusMessage = convertStatusToMessage(normalizedStatus); // 상태별 메시지 변환 메서드 활용 권장
 
         notificationService.sendNotification(
                 order.getUser(),
@@ -280,7 +282,7 @@ public class OrderService {
                 order.getOrderId());
 
         // 도메인 엔티티에 상태 변경 로직 위임
-        order.changeStatus(newStatus);
+        order.changeStatus(normalizedStatus);
 
         return OrderResponse.from(order);
     }
@@ -297,6 +299,22 @@ public class OrderService {
             default:
                 return status;
         }
+    }
+
+    private String normalizeDrivingStatus(String rawStatus) {
+        String status = rawStatus == null ? "" : rawStatus.trim().toUpperCase(Locale.ROOT);
+        if (status.isEmpty()) {
+            throw new IllegalArgumentException("newStatus is required");
+        }
+        if ("MOVING".equals(status)) {
+            status = "IN_TRANSIT";
+        } else if ("COMPLETE".equals(status)) {
+            status = "COMPLETED";
+        }
+        if (!OrderDrivingStatus.asStrings().contains(status)) {
+            throw new IllegalArgumentException("unsupported order status: " + rawStatus);
+        }
+        return status;
     }
 
     public List<OrderResponse> findMyDrivingOrders(Long driverId) {
