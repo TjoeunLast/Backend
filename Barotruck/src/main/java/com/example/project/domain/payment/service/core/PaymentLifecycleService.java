@@ -280,7 +280,7 @@ public class PaymentLifecycleService {
     }
 
     private void validatePaymentStartOrderStatus(String orderStatus) {
-        String status = orderStatus == null ? "" : orderStatus.trim().toUpperCase(Locale.ROOT);
+        String status = normalizePaymentStartOrderStatus(orderStatus);
         boolean allowed = switch (status) {
             case "COMPLETED",
                  "PAID",
@@ -294,6 +294,14 @@ public class PaymentLifecycleService {
         if (!allowed) {
             throw new IllegalStateException("payment can start only after transport completed");
         }
+    }
+
+    private String normalizePaymentStartOrderStatus(String orderStatus) {
+        String status = orderStatus == null ? "" : orderStatus.trim().toUpperCase(Locale.ROOT);
+        if ("COMPLETE".equals(status)) {
+            return "COMPLETED";
+        }
+        return status;
     }
 }
 
