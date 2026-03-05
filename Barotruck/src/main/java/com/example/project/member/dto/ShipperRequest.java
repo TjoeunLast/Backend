@@ -31,6 +31,8 @@ public class ShipperRequest {
     
     
     public static ShipperRequest from(Shipper shipper) {
+    	if (shipper == null) return null; // 중요: 정보가 없으면 null 반환
+    	
         return ShipperRequest.builder()
                 .companyName(shipper.getCompanyName())   // 차주 엔티티의 회사명
                 .bizRegNum(shipper.getBizRegNum())       // 차주 엔티티의 사업자 번호
