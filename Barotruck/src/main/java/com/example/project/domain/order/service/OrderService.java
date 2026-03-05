@@ -619,5 +619,29 @@ public class OrderService {
         }
         return res;
     }
+    
+ // OrderService.java
+
+    @Transactional
+    public OrderResponse updateOrder(Long orderId, Users user, OrderRequest request) {
+        // 1. 오더 조회
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+
+        // 2. 본인 오더인지 검증
+        if (!order.getUser().getUserId().equals(user.getUserId())) {
+            throw new IllegalStateException("본인이 등록한 오더만 수정할 수 있습니다.");
+        }
+
+        // 3. 수정 가능 상태 확인 (배차 대기 중인 경우만 수정 가능)
+        if (!"REQUESTED".equals(order.getStatus())) {
+            throw new IllegalStateException("이미 배차가 완료되었거나 취소된 오더는 수정할 수 없습니다.");
+        }
+
+        Order patchOrder = Order.createOrder(user, request);
+        Order savedOrder = orderRepository.save(patchOrder);
+        return convertToResponse(savedOrder);
+        
+    }
 
 }
