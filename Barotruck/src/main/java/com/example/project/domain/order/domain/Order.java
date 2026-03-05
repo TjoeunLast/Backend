@@ -30,6 +30,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -51,6 +52,9 @@ public class Order {
     // 차주 (DRIVER_NO)
     @Column(name = "DRIVER_NO", nullable = true)
     private Long driverNo;
+    
+    @Version // 🚩 낙관적 락을 위한 버전 필드 추가
+    private Long version;
 
     // 1. 배차를 희망하는 기사들의 ID 목록 (신청자 명단)
     @ElementCollection
