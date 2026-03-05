@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import com.example.project.domain.order.dto.MyRevenueResponse;
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse;
 import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.global.neighborhood.NeighborhoodService;
 import com.example.project.global.neighborhood.dto.NeighborhoodResponse;
 import com.example.project.member.domain.Driver;
@@ -39,6 +41,7 @@ public class OrderService {
     private final DriverRepository driverRepository; // 드라이버 정보 조회를 위한 레포지토리
     private final NeighborhoodService neighborhoodService;
     private final NotificationService notificationService; // [추가] 알림 서비스 주입
+    private final TransportPaymentRepository transportPaymentRepository;
 
     /**
      * 1. 화주: 오더 생성 (C)
@@ -84,19 +87,25 @@ public class OrderService {
         if (order.getDriverList().contains(driverNo)) {
             throw new RuntimeException("이미 신청한 오더입니다.");
         }
-
-        if (order.getSnapshot().isInstant()) {
-            order.assignDriver(driverNo, "ACCEPTED");
-            // [추가] 오더에 배차 완료 알림 발송 (화주에게)
-            notificationService.sendNotification(
-                    order.getUser(), // 화주(Shipper)
-                    "ORDER",
-                    "배차 완료",
-                    String.format("기사님이 배차되었습니다. (차량번호: %s)",
-                            driverRepository.findById(driverNo).map(Driver::getCarNum).orElse("정보 없음")),
-                    order.getOrderId());
-        } else {
-            order.addToDriverList(driverNo);
+        
+        try {
+            if (order.getSnapshot().isInstant()) {
+                order.assignDriver(driverNo, "ACCEPTED");
+                orderRepository.save(order);
+                // [추가] 오더에 배차 완료 알림 발송 (화주에게)
+                notificationService.sendNotification(
+                        order.getUser(), // 화주(Shipper)
+                        "ORDER",
+                        "배차 완료",
+                        String.format("기사님이 배차되었습니다. (차량번호: %s)",
+                                driverRepository.findById(driverNo).map(Driver::getCarNum).orElse("정보 없음")),
+                        order.getOrderId());
+            } else {
+                order.addToDriverList(driverNo);
+            }
+        }catch (ObjectOptimisticLockingFailureException e) {
+            // 🚩 동시성 충돌 발생 시
+            throw new RuntimeException("아쉽게도 방금 다른 차주님이 배차를 수락하셨습니다.");
         }
     }
 
@@ -472,6 +481,46 @@ public class OrderService {
                 .orders(orderList)
                 .build();
     }
+    
+    @Transactional
+    public void cancelExpiredOrders() {
+        // 1. 현재 시간 기준으로 24시간 전 시간 계산
+        LocalDateTime threshold = LocalDateTime.now().minusDays(1);
+        
+        // 2. 취소 대상 조회: 상태가 'REQUESTED'이고 상차 예정일이 24시간 이상 지난 오더들
+        // (startSchedule이 String 형식이므로 DB 함수를 사용하여 비교하거나 로직상 처리가 필요합니다)
+        List<Order> expiredOrders = orderRepository.findAll().stream()
+                .filter(o -> "REQUESTED".equals(o.getStatus()))
+                .filter(o -> {
+                    try {
+                        // String 타입의 startSchedule을 LocalDateTime으로 변환 (패턴은 프로젝트 설정에 맞춤)
+                        LocalDateTime schedule = LocalDateTime.parse(o.getSnapshot().getStartSchedule(), 
+                                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                        return schedule.isBefore(threshold);
+                    } catch (Exception e) {
+                        return false;
+                    }
+                })
+                .collect(Collectors.toList());
+
+        // 3. 대상 오더들 취소 처리
+        for (Order order : expiredOrders) {
+            order.changeStatus("CANCELLED");
+            
+            // CancellationInfo 생성 및 저장
+            CancellationInfo cancelInfo = CancellationInfo.builder()
+                    .order(order)
+                    .cancelReason("미배정으로 인한 시스템 자동 취소")
+                    .cancelledAt(LocalDateTime.now())
+                    .cancelledBy("SYSTEM")
+                    .build();
+            
+            // 프로젝트 구조에 따라 cancelInfoRepository.save(cancelInfo) 호출 필요
+            order.setCancellationInfo(cancelInfo); 
+        }
+    }
+    
+    
 
     private OrderResponse convertToResponse(Order order) {
         // 1. Embedded 객체 추출
@@ -489,6 +538,7 @@ public class OrderService {
                 // 1. 주문 기본 정보 및 시스템 지표
                 .orderId(order.getOrderId())
                 .status(order.getStatus())
+                .settlementStatus(resolveSettlementStatus(order))
                 .distance(order.getDistance())
                 .duration(order.getDuration())
                 .createdAt(order.getCreatedAt())
@@ -541,6 +591,18 @@ public class OrderService {
     }
     
     // [유림 추가] 기존 로직을 유지하면서 현재 사용자의 신청 여부를 체크하여 상태를 변조하는 메서드
+    private String resolveSettlementStatus(Order order) {
+        if (order == null || order.getOrderId() == null) {
+            return "READY";
+        }
+
+        return transportPaymentRepository.findByOrderId(order.getOrderId())
+                .map(payment -> payment.getStatus() != null ? payment.getStatus().name() : null)
+                .orElseGet(() -> order.getSettlement() != null && order.getSettlement().getStatus() != null
+                        ? order.getSettlement().getStatus().name()
+                        : "READY");
+    }
+
     private OrderResponse convertToResponse(Order order, Long currentUserId) {
         // 1. 지연 로딩 방지: 지원자 명단을 확실하게 불러옵니다.
         if (order.getDriverList() != null) {
