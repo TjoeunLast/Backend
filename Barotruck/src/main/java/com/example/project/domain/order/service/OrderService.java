@@ -22,6 +22,7 @@ import com.example.project.domain.order.dto.MyRevenueResponse;
 import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse;
 import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.global.neighborhood.NeighborhoodService;
 import com.example.project.global.neighborhood.dto.NeighborhoodResponse;
 import com.example.project.member.domain.Driver;
@@ -39,6 +40,7 @@ public class OrderService {
     private final DriverRepository driverRepository; // 드라이버 정보 조회를 위한 레포지토리
     private final NeighborhoodService neighborhoodService;
     private final NotificationService notificationService; // [추가] 알림 서비스 주입
+    private final TransportPaymentRepository transportPaymentRepository;
 
     /**
      * 1. 화주: 오더 생성 (C)
@@ -489,6 +491,7 @@ public class OrderService {
                 // 1. 주문 기본 정보 및 시스템 지표
                 .orderId(order.getOrderId())
                 .status(order.getStatus())
+                .settlementStatus(resolveSettlementStatus(order))
                 .distance(order.getDistance())
                 .duration(order.getDuration())
                 .createdAt(order.getCreatedAt())
@@ -541,6 +544,18 @@ public class OrderService {
     }
     
     // [유림 추가] 기존 로직을 유지하면서 현재 사용자의 신청 여부를 체크하여 상태를 변조하는 메서드
+    private String resolveSettlementStatus(Order order) {
+        if (order == null || order.getOrderId() == null) {
+            return "READY";
+        }
+
+        return transportPaymentRepository.findByOrderId(order.getOrderId())
+                .map(payment -> payment.getStatus() != null ? payment.getStatus().name() : null)
+                .orElseGet(() -> order.getSettlement() != null && order.getSettlement().getStatus() != null
+                        ? order.getSettlement().getStatus().name()
+                        : "READY");
+    }
+
     private OrderResponse convertToResponse(Order order, Long currentUserId) {
         // 1. 지연 로딩 방지: 지원자 명단을 확실하게 불러옵니다.
         if (order.getDriverList() != null) {

@@ -8,6 +8,7 @@ public interface OrderPort {
 
     void setOrderPaid(Long orderId);
     void setOrderConfirmed(Long orderId);
+    void setOrderCompleted(Long orderId);
     void setOrderDisputed(Long orderId);
 
     record OrderSnapshot(
