@@ -67,6 +67,9 @@ public class Driver {
     @JoinColumn(name = "USER_ID", nullable = true)
     private Users user;
 
+    
+    private Double lat;      // 활동 지역 위도
+    private Double lng;      // 활동 지역 경도
     // 차주가 선호하는 지역 코드와 주소
     private Long nbhId;
     private String address;

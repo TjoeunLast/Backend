@@ -52,6 +52,8 @@ public class Shipper {
     @Column(name = "UPDATED_AT")
     private LocalDateTime updatedAt;
 
+    
+    
     // 공통 User 엔티티와의 연관 관계
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "USER_ID", nullable = true)
