@@ -54,6 +54,7 @@ public class Order {
     private Long driverNo;
     
     @Version // 🚩 낙관적 락을 위한 버전 필드 추가
+    @Column(columnDefinition = "NUMBER DEFAULT 0") // 사용하는 DB에 맞게 (MySQL이면 BIGINT)
     private Long version;
 
     // 1. 배차를 희망하는 기사들의 ID 목록 (신청자 명단)
