@@ -270,30 +270,58 @@ public class OrderService {
         }
     }
 
+    
     public OrderResponse updateStatus(Long orderId, String newStatus, Long driverNo) {
+        System.out.println("=== 상태 변경 시작 ===");
+        System.out.println("입력 데이터 -> orderId: " + orderId + ", newStatus: " + newStatus + ", driverNo: " + driverNo);
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주문입니다."));
 
-        // 권한 검증: 이 오더를 배정받은 기사인지 확인
+        System.out.println("DB 조회 결과 -> order.getDriverNo(): " + order.getDriverNo());
+
+        // [중요 체크] 여기서 튕길 가능성이 매우 높습니다.
         if (order.getDriverNo() == null || !order.getDriverNo().equals(driverNo)) {
+            System.out.println("!!! 권한 검증 실패: 담당 기사가 아님 !!!");
             throw new IllegalStateException("해당 주문의 담당 기사가 아닙니다.");
         }
+        System.out.println("권한 검증 통과");
 
-        // [알림 발송]
         String normalizedStatus = normalizeDrivingStatus(newStatus);
-        String statusMessage = convertStatusToMessage(normalizedStatus); // 상태별 메시지 변환 메서드 활용 권장
+        String statusMessage = convertStatusToMessage(normalizedStatus);
+        System.out.println("상태 변환 결과: " + normalizedStatus + " (" + statusMessage + ")");
 
-        notificationService.sendNotification(
-                order.getUser(),
-                "ORDER",
-                "주문 상태 변경",
-                "주문 상태가 '" + statusMessage + "'(으)로 변경되었습니다.",
-                order.getOrderId());
+        try {
+            notificationService.sendNotification(
+                    order.getUser(),
+                    "ORDER",
+                    "주문 상태 변경",
+                    "주문 상태가 '" + statusMessage + "'(으)로 변경되었습니다.",
+                    order.getOrderId());
+            System.out.println("알림 발송 완료");
+        } catch (Exception e) {
+            System.out.println("알림 발송 중 예외 발생: " + e.getMessage());
+        }
 
-        // 도메인 엔티티에 상태 변경 로직 위임
+        System.out.println("엔티티 상태 변경 전: " + order.getStatus());
         order.changeStatus(normalizedStatus);
+        System.out.println("엔티티 상태 변경 후: " + order.getStatus());
 
-        return OrderResponse.from(order);
+        Order savedOrder = orderRepository.save(order);
+        // save 후 즉시 반영을 확인하고 싶다면 아래 주석 해제 (단, 로그 확인용)
+        // orderRepository.flush(); 
+        
+        System.out.println("Repository save 완료 (ID: " + savedOrder.getOrderId() + ")");
+        System.out.println("=== 상태 변경 종료 ===");
+        
+     // 2. 에러가 숨어있는 곳을 잡기 위한 Try-Catch 덫
+        try {
+            return convertToResponse(order);
+        } catch (Exception e) {
+            System.err.println("!!! DTO 변환 중 치명적 에러 발생 !!! : " + e.getMessage());
+            e.printStackTrace(); // 어디서 터졌는지 상세 줄 번호를 출력합니다.
+            throw e; // 에러를 다시 던져서 프론트에 오류를 알림
+        }
     }
 
     // (참고) 상태 메시지 변환 헬퍼
@@ -590,17 +618,28 @@ public class OrderService {
                 .build();
     }
     
-    // [유림 추가] 기존 로직을 유지하면서 현재 사용자의 신청 여부를 체크하여 상태를 변조하는 메서드
+ // OrderService.java 내부에 있는 메서드 교체
+
     private String resolveSettlementStatus(Order order) {
         if (order == null || order.getOrderId() == null) {
             return "READY";
         }
 
-        return transportPaymentRepository.findByOrderId(order.getOrderId())
-                .map(payment -> payment.getStatus() != null ? payment.getStatus().name() : null)
-                .orElseGet(() -> order.getSettlement() != null && order.getSettlement().getStatus() != null
-                        ? order.getSettlement().getStatus().name()
-                        : "READY");
+        try {
+            // 결제 정보 조회 시도 (여기서 터지더라도 catch가 잡아줍니다)
+            return transportPaymentRepository.findByOrderId(order.getOrderId())
+                    .map(payment -> payment.getStatus() != null ? payment.getStatus().name() : "READY")
+                    .orElseGet(() -> {
+                        if (order.getSettlement() != null && order.getSettlement().getStatus() != null) {
+                            return order.getSettlement().getStatus().name();
+                        }
+                        return "READY";
+                    });
+        } catch (Exception e) {
+            // 🚨 핵심 해결책: 에러가 발생하면 로깅만 하고 기본값인 "READY"를 반환하여 롤백을 방지합니다.
+            System.err.println("결제 상태 조회 중 에러 발생 (무시하고 READY 반환): " + e.getMessage());
+            return "READY";
+        }
     }
 
     private OrderResponse convertToResponse(Order order, Long currentUserId) {

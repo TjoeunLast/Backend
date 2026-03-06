@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.project.domain.notification.domain.Notification; // 우리 엔티티를 기본으로 사용
@@ -24,9 +25,10 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final UsersRepository usersRepository;
 
-    @Transactional
+ // 🚩 핵심 1: REQUIRES_NEW를 적용하여, 여기서 에러가 나도 오더 상태 업데이트(본체)는 롤백되지 않게 격리합니다.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendNotification(Users user, String type, String title, String body, Long targetId) {
-        // 1. DB에 알림 내역 기록 (우리 프로젝트의 Notification 엔티티 사용)
+        // 1. DB에 알림 내역 기록
         Notification notification = Notification.builder()
                 .user(user)
                 .type(type)
@@ -38,28 +40,31 @@ public class NotificationService {
         notificationRepository.save(notification);
 
         // 2. FCM 푸시 발송
-        if (user.getFcmToken() != null) {
-            // 여기에서 Firebase의 Notification을 전체 경로로 선언합니다.
+        String token = user.getFcmToken();
+        
+        // 🚩 핵심 2: null 체크뿐만 아니라, 빈 문자열("")인지도 반드시 체크해야 Firebase가 터지지 않습니다!
+        if (token != null && !token.trim().isEmpty()) {
             com.google.firebase.messaging.Notification fcmPayload = com.google.firebase.messaging.Notification.builder()
                     .setTitle(title)
                     .setBody(body)
                     .build();
 
             Message message = Message.builder()
-                    .setToken(user.getFcmToken())
-                    .setNotification(fcmPayload) // 생성한 페이로드를 넣습니다.
+                    .setToken(token)
+                    .setNotification(fcmPayload)
                     .putData("type", type)
                     .putData("targetId", String.valueOf(targetId))
                     .build();
 
             try {
-                FirebaseMessaging.getInstance().sendAsync(message); // 비동기 발송 추천
+                FirebaseMessaging.getInstance().sendAsync(message);
             } catch (Exception e) {
-                e.printStackTrace();
+                // 발송 실패 시 서버가 뻗지 않도록 로그만 남깁니다.
+                System.err.println("FCM 푸시 발송 실패: " + e.getMessage());
             }
         }
     }
-
+    
     public List<NotificationResponse> getNotifications(Long userId) {
         Users user = usersRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
