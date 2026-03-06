@@ -107,3 +107,9 @@ Barotruck/src/main/resources/data.sql
 META-INF/MANIFEST.MF
 Barotruck/src/main/resources/firebase-service-account.json
 Barotruck/GIT_GUIDE.md
+/FrontNew
+.gitattributes
+.editorconfig
+AGENTS.md
+/claude-code-infrastructure-showcase
+Barotruck/docs/payment-settlement-mobile-test-guide.md

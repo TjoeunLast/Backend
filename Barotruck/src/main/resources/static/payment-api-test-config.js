@@ -34,12 +34,12 @@ window.PaymentApiTestConfig = {
         },
         adminFeeRun: {
             method: "POST",
-            path: "/api/admin/payment/fee-invoices/run?period=2026-02",
+            path: "/api/admin/payment/fee-invoices/run?period=<CURRENT_PERIOD>",
             body: null
         },
         feeInvoiceMe: {
             method: "GET",
-            path: "/api/v1/payments/fee-invoices/me?period=2026-02",
+            path: "/api/v1/payments/fee-invoices/me?period=<CURRENT_PERIOD>",
             body: null
         },
         feeInvoicePaid: {
@@ -49,7 +49,7 @@ window.PaymentApiTestConfig = {
         },
         adminPayoutRun: {
             method: "POST",
-            path: "/api/admin/payment/payouts/run?date=2026-02-23",
+            path: "/api/admin/payment/payouts/run?date=<CURRENT_DATE>",
             body: null
         },
         adminRetryItem: {
