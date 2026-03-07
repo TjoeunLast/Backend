@@ -153,6 +153,16 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
                      @Param("totalPrice") Long totalPrice,
                      @Param("distance") Long distance);
 
+       @Modifying(clearAutomatically = true, flushAutomatically = true)
+       @Query(value = "UPDATE ORDERS " +
+                     "SET STATUS = :status, " +
+                     "UPDATED = SYSTIMESTAMP, " +
+                     "VERSION = NVL(VERSION, 0) + 1 " +
+                     "WHERE ORDER_ID = :orderId", nativeQuery = true)
+       int updateStatusForPaymentFlow(
+                     @Param("orderId") Long orderId,
+                     @Param("status") String status);
+
        List<Order> findByUser_UserIdOrderByCreatedAtDesc(Long userId);
 
        @Query("SELECT " +

@@ -81,67 +81,52 @@ public class JpaOrderPort implements OrderPort {
 
 
     /**
-     * 주문 상태를 PAID로 변경
-     * (결제 완료 시 호출)
+     * 결제 단계는 주문 운송 상태를 오염시키지 않는다.
+     * 운송 완료 이후 결제가 진행되므로 주문 상태는 COMPLETED로 유지한다.
      */
     @Override
     @Transactional
     public void setOrderPaid(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("order not found: " + orderId));
-
-        // 도메인 메서드를 통해 상태 변경
-        updateStatusForPaymentFlow(order, "PAID");
+        updateStatusForPaymentFlow(orderId, "COMPLETED");
     }
 
 
     /**
-     * 주문 상태를 CONFIRMED로 변경
+     * 차주 확인 이후에도 주문 상태는 COMPLETED로 유지한다.
      */
     @Override
     @Transactional
     public void setOrderConfirmed(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("order not found: " + orderId));
-
-        updateStatusForPaymentFlow(order, "CONFIRMED");
+        updateStatusForPaymentFlow(orderId, "COMPLETED");
     }
 
     /**
-     * 토스 결제처럼 차주 확인 없이 즉시 완료 처리하는 결제 흐름에서 사용.
+     * 결제 포트에서 호출되더라도 운송 상태는 COMPLETED가 정답이다.
      */
     @Override
     @Transactional
     public void setOrderCompleted(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("order not found: " + orderId));
-
-        updateStatusForPaymentFlow(order, "COMPLETED");
+        updateStatusForPaymentFlow(orderId, "COMPLETED");
     }
 
 
     /**
-     * 주문 상태를 DISPUTED로 변경
+     * 이의 상태 역시 payment/dispute 도메인에서 관리하고 주문 상태는 유지한다.
      */
     @Override
     @Transactional
     public void setOrderDisputed(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("order not found: " + orderId));
-
-        updateStatusForPaymentFlow(order, "DISPUTED");
+        updateStatusForPaymentFlow(orderId, "COMPLETED");
     }
 
     /**
-     * 결제 단계에서는 운송 완료(COMPLETED) 이후에도 결제 상태로 전이해야 한다.
-     * COMPLETED 에서는 changeStatus 가드를 우회해 상태를 반영한다.
+     * 결제 흐름에서도 주문의 운송 상태는 COMPLETED로 유지한다.
      */
-    private void updateStatusForPaymentFlow(Order order, String status) {
-        if ("COMPLETED".equals(order.getStatus())) {
-            order.assignDriver(order.getDriverNo(), status);
-            return;
+    private void updateStatusForPaymentFlow(Long orderId, String status) {
+        int updated = orderRepository.updateStatusForPaymentFlow(orderId, status);
+        if (updated == 0) {
+            throw new IllegalArgumentException("order not found: " + orderId);
         }
-        order.changeStatus(status);
     }
 
     private long nullSafe(Long value) {
