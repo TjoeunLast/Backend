@@ -178,24 +178,18 @@ public class PaymentLifecycleService {
             return payment;
         }
         if (payment.getStatus() == TransportPaymentStatus.PAID) {
-            payment.confirm(LocalDateTime.now());
-            orderPort.setOrderCompleted(tx.getOrderId());
-
-            TransportPayment saved = transportPaymentRepository.save(payment);
             upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), tx.getAmount(), fee);
-            completeSettlementOnConfirm(tx.getOrderId());
-            return saved;
+            orderPort.setOrderPaid(tx.getOrderId());
+            return payment;
         }
 
         String pgReference = firstNonBlank(tx.getTransactionId(), tx.getPaymentKey(), tx.getPgOrderId());
         payment.markPaid(pgReference, LocalDateTime.now());
         payment.setPgTid(pgReference);
-        payment.confirm(LocalDateTime.now());
-        orderPort.setOrderCompleted(tx.getOrderId());
+        orderPort.setOrderPaid(tx.getOrderId());
 
         TransportPayment saved = transportPaymentRepository.save(payment);
         upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), tx.getAmount(), fee);
-        completeSettlementOnConfirm(tx.getOrderId());
         return saved;
     }
 
