@@ -7,7 +7,22 @@ plugins {
 
 // @RequestParam, @PathVariable 등에서 파라미터 이름을 리플렉션으로 읽을 수 있게 함
 tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
     options.compilerArgs.add('-parameters')
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+    options.charSet = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+}
+
+tasks.withType(ProcessResources).configureEach {
+    filteringCharset = 'UTF-8'
+}
+
+tasks.withType(JavaExec).configureEach {
+    jvmArgs += ['-Dfile.encoding=UTF-8']
 }
 
 
@@ -106,4 +121,6 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    systemProperty 'file.encoding', 'UTF-8'
+    jvmArgs '-Dfile.encoding=UTF-8'
 }

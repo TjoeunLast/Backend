@@ -61,6 +61,19 @@ function getEffectivePaymentKey() {
     return "";
 }
 
+function getCurrentPeriod() {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    return now.getFullYear() + "-" + month;
+}
+
+function getCurrentDate() {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return now.getFullYear() + "-" + month + "-" + day;
+}
+
 function getTemplateValues() {
     return {
         orderId: getValue("orderId"),
@@ -72,7 +85,9 @@ function getTemplateValues() {
         clientKey: getValue("clientKey"),
         paymentKey: getEffectivePaymentKey(),
         pgOrderId: getValue("pgOrderId"),
-        amount: getValue("amount")
+        amount: getValue("amount"),
+        currentPeriod: getCurrentPeriod(),
+        currentDate: getCurrentDate()
     };
 }
 
@@ -93,6 +108,8 @@ function resolveTemplates(text) {
     if (t.paymentKey) out = replaceAll(out, "<PAYMENT_KEY>", t.paymentKey);
     if (t.pgOrderId) out = replaceAll(out, "<PG_ORDER_ID>", t.pgOrderId);
     if (t.amount) out = replaceAll(out, "<AMOUNT>", t.amount);
+    if (t.currentPeriod) out = replaceAll(out, "<CURRENT_PERIOD>", t.currentPeriod);
+    if (t.currentDate) out = replaceAll(out, "<CURRENT_DATE>", t.currentDate);
     return out;
 }
 
