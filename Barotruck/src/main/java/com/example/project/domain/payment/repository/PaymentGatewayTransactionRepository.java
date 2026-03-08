@@ -29,5 +29,19 @@ public interface PaymentGatewayTransactionRepository extends JpaRepository<Payme
             GatewayTxStatus status,
             LocalDateTime expiresAt
     );
+
+    long countByProviderAndStatus(PaymentProvider provider, GatewayTxStatus status);
+
+    long countByProviderAndStatusAndNextRetryAtLessThanEqual(
+            PaymentProvider provider,
+            GatewayTxStatus status,
+            LocalDateTime nextRetryAt
+    );
+
+    long countByProviderAndStatusAndExpiresAtBefore(
+            PaymentProvider provider,
+            GatewayTxStatus status,
+            LocalDateTime expiresAt
+    );
 }
 
