@@ -29,6 +29,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.PostLoad;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
@@ -107,6 +108,14 @@ public class Order {
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Settlement settlement;
 
+    @PostLoad
+    private void onPostLoad() {
+        // 만약 DB에 버전이 비어있다면(null), 에러가 나지 않도록 0으로 채워줍니다.
+        if (this.version == null) {
+            this.version = 0L;
+        }
+    }
+    
     // Order.java 내부에 추가
     public void changeStatus(String newStatus) {
         validateStatusTransition(newStatus); // 필요 시 상태 전환 규칙 검증 로직 추가
