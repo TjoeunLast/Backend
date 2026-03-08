@@ -1,8 +1,10 @@
 package com.example.project.domain.payment.service.core;
 
 import com.example.project.domain.payment.domain.FeePolicyConfig;
+import com.example.project.domain.payment.dto.paymentRequest.UpdateLevelFeeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdateFeePolicyRequest;
 import com.example.project.domain.payment.dto.paymentResponse.FeePolicyResponse;
+import com.example.project.domain.payment.dto.paymentResponse.LevelFeePolicyResponse;
 import com.example.project.domain.payment.repository.FeePolicyConfigRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,8 +19,8 @@ import java.time.LocalDateTime;
 public class FeePolicyService {
 
     private static final BigDecimal DEFAULT_LEVEL0_RATE = new BigDecimal("0.05");
-    private static final BigDecimal DEFAULT_LEVEL1_RATE = new BigDecimal("0.05");
-    private static final BigDecimal DEFAULT_LEVEL2_RATE = new BigDecimal("0.04");
+    private static final BigDecimal DEFAULT_LEVEL1_RATE = new BigDecimal("0.04");
+    private static final BigDecimal DEFAULT_LEVEL2_RATE = new BigDecimal("0.03");
     private static final BigDecimal DEFAULT_LEVEL3_PLUS_RATE = new BigDecimal("0.03");
     private static final BigDecimal DEFAULT_FIRST_PAYMENT_PROMO_RATE = new BigDecimal("0.03");
     private static final BigDecimal DEFAULT_MIN_FEE = new BigDecimal("2000.00");
@@ -28,7 +30,8 @@ public class FeePolicyService {
     public record FeeResult(
             BigDecimal feeRate,
             BigDecimal feeAmount,
-            BigDecimal netAmount,
+            BigDecimal chargedAmount,
+            BigDecimal driverAmount,
             boolean promoApplied
     ) {
     }
@@ -36,15 +39,13 @@ public class FeePolicyService {
     @Transactional(readOnly = true)
     public FeePolicyResponse getCurrentPolicy() {
         ResolvedPolicy policy = resolvePolicy();
-        return FeePolicyResponse.builder()
-                .level0Rate(policy.level0Rate())
-                .level1Rate(policy.level1Rate())
-                .level2Rate(policy.level2Rate())
-                .level3PlusRate(policy.level3PlusRate())
-                .firstPaymentPromoRate(policy.firstPaymentPromoRate())
-                .minFee(policy.minFee())
-                .updatedAt(policy.updatedAt())
-                .build();
+        return toPolicyResponse(policy);
+    }
+
+    @Transactional(readOnly = true)
+    public LevelFeePolicyResponse getCurrentPolicyByLevel(Long level) {
+        ResolvedPolicy policy = resolvePolicy();
+        return toLevelResponse(level, policy);
     }
 
     @Transactional
@@ -64,15 +65,31 @@ public class FeePolicyService {
                         .build()
         );
 
-        return FeePolicyResponse.builder()
-                .level0Rate(saved.getLevel0Rate())
-                .level1Rate(saved.getLevel1Rate())
-                .level2Rate(saved.getLevel2Rate())
-                .level3PlusRate(saved.getLevel3PlusRate())
-                .firstPaymentPromoRate(saved.getFirstPaymentPromoRate())
-                .minFee(saved.getMinFee())
-                .updatedAt(saved.getCreatedAt())
-                .build();
+        return toPolicyResponse(saved);
+    }
+
+    @Transactional
+    public LevelFeePolicyResponse updateLevelPolicy(UpdateLevelFeeRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("request is required");
+        }
+
+        long appliedLevel = normalizeLevelBucket(request.getLevel());
+        ResolvedPolicy current = resolvePolicy();
+        BigDecimal normalizedRate = normalizeRate(request.getRate(), "rate");
+
+        FeePolicyConfig saved = feePolicyConfigRepository.save(
+                FeePolicyConfig.builder()
+                        .level0Rate(appliedLevel == 0 ? normalizedRate : current.level0Rate())
+                        .level1Rate(appliedLevel == 1 ? normalizedRate : current.level1Rate())
+                        .level2Rate(appliedLevel == 2 ? normalizedRate : current.level2Rate())
+                        .level3PlusRate(appliedLevel >= 3 ? normalizedRate : current.level3PlusRate())
+                        .firstPaymentPromoRate(current.firstPaymentPromoRate())
+                        .minFee(current.minFee())
+                        .build()
+        );
+
+        return toLevelResponse(request.getLevel(), toResolvedPolicy(saved));
     }
 
     public FeeResult calculate(BigDecimal amount, Long userLevel, boolean firstPaymentPromoEligible) {
@@ -90,8 +107,9 @@ public class FeePolicyService {
             fee = policy.minFee();
         }
 
-        BigDecimal net = amount.subtract(fee).setScale(2, RoundingMode.HALF_UP);
-        return new FeeResult(rate, fee, net, promoApplied);
+        BigDecimal charged = amount.add(fee).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal driverAmount = amount.setScale(2, RoundingMode.HALF_UP);
+        return new FeeResult(rate, fee, charged, driverAmount, promoApplied);
     }
 
     private BigDecimal mapRate(Long userLevel, ResolvedPolicy policy) {
@@ -105,6 +123,16 @@ public class FeePolicyService {
             case 2 -> policy.level2Rate();
             default -> policy.level3PlusRate();
         };
+    }
+
+    private long normalizeLevelBucket(Long level) {
+        if (level == null) {
+            throw new IllegalArgumentException("level is required");
+        }
+        if (level < 0) {
+            throw new IllegalArgumentException("level must be >= 0");
+        }
+        return Math.min(level, 3L);
     }
 
     private ResolvedPolicy resolvePolicy() {
@@ -130,6 +158,61 @@ public class FeePolicyService {
                 nullSafeMinFee(config.getMinFee()),
                 config.getCreatedAt()
         );
+    }
+
+    private ResolvedPolicy toResolvedPolicy(FeePolicyConfig config) {
+        return new ResolvedPolicy(
+                nullSafeRate(config.getLevel0Rate(), DEFAULT_LEVEL0_RATE),
+                nullSafeRate(config.getLevel1Rate(), DEFAULT_LEVEL1_RATE),
+                nullSafeRate(config.getLevel2Rate(), DEFAULT_LEVEL2_RATE),
+                nullSafeRate(config.getLevel3PlusRate(), DEFAULT_LEVEL3_PLUS_RATE),
+                nullSafeRate(config.getFirstPaymentPromoRate(), DEFAULT_FIRST_PAYMENT_PROMO_RATE),
+                nullSafeMinFee(config.getMinFee()),
+                config.getCreatedAt()
+        );
+    }
+
+    private FeePolicyResponse toPolicyResponse(ResolvedPolicy policy) {
+        return FeePolicyResponse.builder()
+                .level0Rate(policy.level0Rate())
+                .level1Rate(policy.level1Rate())
+                .level2Rate(policy.level2Rate())
+                .level3PlusRate(policy.level3PlusRate())
+                .firstPaymentPromoRate(policy.firstPaymentPromoRate())
+                .minFee(policy.minFee())
+                .updatedAt(policy.updatedAt())
+                .build();
+    }
+
+    private FeePolicyResponse toPolicyResponse(FeePolicyConfig config) {
+        return FeePolicyResponse.builder()
+                .level0Rate(config.getLevel0Rate())
+                .level1Rate(config.getLevel1Rate())
+                .level2Rate(config.getLevel2Rate())
+                .level3PlusRate(config.getLevel3PlusRate())
+                .firstPaymentPromoRate(config.getFirstPaymentPromoRate())
+                .minFee(config.getMinFee())
+                .updatedAt(config.getCreatedAt())
+                .build();
+    }
+
+    private LevelFeePolicyResponse toLevelResponse(Long requestedLevel, ResolvedPolicy policy) {
+        long appliedLevel = normalizeLevelBucket(requestedLevel);
+        BigDecimal rate = switch ((int) appliedLevel) {
+            case 0 -> policy.level0Rate();
+            case 1 -> policy.level1Rate();
+            case 2 -> policy.level2Rate();
+            default -> policy.level3PlusRate();
+        };
+
+        return LevelFeePolicyResponse.builder()
+                .requestedLevel(requestedLevel)
+                .appliedLevel(appliedLevel)
+                .rate(rate)
+                .firstPaymentPromoRate(policy.firstPaymentPromoRate())
+                .minFee(policy.minFee())
+                .updatedAt(policy.updatedAt())
+                .build();
     }
 
     private BigDecimal nullSafeRate(BigDecimal value, BigDecimal defaultValue) {
