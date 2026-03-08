@@ -178,4 +178,24 @@ public class TransportPayment {
         }
         this.paymentTiming = paymentTiming;
     }
+
+    public void applyPricingSnapshots(
+            BigDecimal amount,
+            BigDecimal feeRateSnapshot,
+            BigDecimal feeAmountSnapshot,
+            BigDecimal netAmountSnapshot
+    ) {
+        if (amount != null) {
+            this.amount = amount;
+        }
+        if (feeRateSnapshot != null) {
+            this.feeRateSnapshot = feeRateSnapshot;
+        }
+        if (feeAmountSnapshot != null) {
+            this.feeAmountSnapshot = feeAmountSnapshot;
+        }
+        if (netAmountSnapshot != null) {
+            this.netAmountSnapshot = netAmountSnapshot;
+        }
+    }
 }

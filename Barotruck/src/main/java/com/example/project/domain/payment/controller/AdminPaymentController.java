@@ -2,8 +2,10 @@ package com.example.project.domain.payment.controller;
 
 import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisputeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdateFeePolicyRequest;
+import com.example.project.domain.payment.dto.paymentRequest.UpdateLevelFeeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdatePaymentDisputeStatusRequest;
 import com.example.project.domain.payment.dto.paymentResponse.FeePolicyResponse;
+import com.example.project.domain.payment.dto.paymentResponse.LevelFeePolicyResponse;
 import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeResponse;
 import com.example.project.domain.payment.service.core.DriverPayoutService;
 import com.example.project.domain.payment.service.core.FeeInvoiceBatchService;
@@ -103,12 +105,34 @@ public class AdminPaymentController {
         return ApiResponse.ok(feePolicyService.getCurrentPolicy());
     }
 
+    @GetMapping("/fee-policy/current")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<FeePolicyResponse> getCurrentFeePolicy() {
+        return ApiResponse.ok(feePolicyService.getCurrentPolicy());
+    }
+
+    @GetMapping("/fee-policy/levels/{level}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<LevelFeePolicyResponse> getFeePolicyByLevel(
+            @PathVariable("level") Long level
+    ) {
+        return ApiResponse.ok(feePolicyService.getCurrentPolicyByLevel(level));
+    }
+
     @PatchMapping("/fee-policy")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<FeePolicyResponse> updateFeePolicy(
             @Valid @RequestBody UpdateFeePolicyRequest request
     ) {
         return ApiResponse.ok(feePolicyService.updatePolicy(request));
+    }
+
+    @PostMapping("/fee-policy/levels")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<LevelFeePolicyResponse> updateFeePolicyByLevel(
+            @Valid @RequestBody UpdateLevelFeeRequest request
+    ) {
+        return ApiResponse.ok(feePolicyService.updateLevelPolicy(request));
     }
 
 }
