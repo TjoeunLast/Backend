@@ -3,14 +3,17 @@ package com.example.project.domain.notice.service;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.notice.domain.Notice;
 import com.example.project.domain.notice.dto.NoticeRequest;
 import com.example.project.domain.notice.dto.NoticeResponse;
 import com.example.project.domain.notice.repository.NoticeRepository;
 import com.example.project.member.domain.Users;
+import com.example.project.member.repository.UsersRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -19,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class NoticeService {
     private final NoticeRepository noticeRepository;
+    private final UsersRepository usersRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public Long createNotice(NoticeRequest request, Users admin) {
@@ -28,7 +33,17 @@ public class NoticeService {
                 .isPinned(request.getIsPinned() != null ? request.getIsPinned() : "N")
                 .admin(admin)
                 .build();
-        return noticeRepository.save(notice).getNoticeId();
+        Notice saved = noticeRepository.save(notice);
+        usersRepository.findAll(Sort.by(Sort.Direction.ASC, "userId"))
+                .stream()
+                .filter(user -> admin == null || !user.getUserId().equals(admin.getUserId()))
+                .forEach(user -> sendNoticeNotificationSafely(
+                        user,
+                        "새 공지 등록",
+                        request.getTitle(),
+                        saved.getNoticeId()
+                ));
+        return saved.getNoticeId();
     }
 
     public List<NoticeResponse> getAllNotices() {
@@ -73,5 +88,16 @@ public class NoticeService {
                 .adminName(n.getAdmin() != null ? n.getAdmin().getNickname() : "관리자")
                 .createdAt(n.getCreatedAt())
                 .build();
+    }
+
+    private void sendNoticeNotificationSafely(Users recipient, String title, String body, Long targetId) {
+        if (recipient == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(recipient, "NOTICE", title, body, targetId);
+        } catch (Exception e) {
+            System.out.println("공지 알림 발송 중 예외 발생: " + e.getMessage());
+        }
     }
 }

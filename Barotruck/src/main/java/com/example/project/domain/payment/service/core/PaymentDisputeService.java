@@ -1,5 +1,6 @@
 package com.example.project.domain.payment.service.core;
 
+import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.payment.domain.PaymentDispute;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeReason;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeStatus;
@@ -13,8 +14,10 @@ import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.settlement.domain.SettlementStatus;
 import com.example.project.domain.settlement.repository.SettlementRepository;
 import com.example.project.member.domain.Users;
+import com.example.project.member.repository.UsersRepository;
 import com.example.project.security.user.Role;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +31,8 @@ public class PaymentDisputeService {
     private final PaymentDisputeRepository paymentDisputeRepository;
     private final SettlementRepository settlementRepository;
     private final OrderPort orderPort;
+    private final NotificationService notificationService;
+    private final UsersRepository usersRepository;
 
     @Transactional
     public PaymentDispute createDispute(Users currentUser, Long orderId, CreatePaymentDisputeRequest request) {
@@ -98,7 +103,9 @@ public class PaymentDisputeService {
             settlementRepository.save(s);
         });
 
-        return paymentDisputeRepository.save(dispute);
+        PaymentDispute saved = paymentDisputeRepository.save(dispute);
+        notifyDisputeStatusUpdated(payment, nextStatus, orderId);
+        return saved;
     }
 
     private PaymentDispute createDisputeInternal(
@@ -144,6 +151,7 @@ public class PaymentDisputeService {
         );
         PaymentDispute saved = paymentDisputeRepository.save(dispute);
         applyDisputedState(orderId, payment);
+        notifyDisputeCreated(currentUser, payment, requesterUserId, orderId, reasonCode);
         return saved;
     }
 
@@ -254,6 +262,75 @@ public class PaymentDisputeService {
     private void requireAuthenticated(Users currentUser) {
         if (currentUser == null || currentUser.getUserId() == null) {
             throw new IllegalStateException("authentication required");
+        }
+    }
+
+    private void notifyDisputeCreated(
+            Users currentUser,
+            TransportPayment payment,
+            Long requesterUserId,
+            Long orderId,
+            PaymentDisputeReason reasonCode
+    ) {
+        Long opponentUserId = null;
+        if (requesterUserId != null && requesterUserId.equals(payment.getDriverUserId())) {
+            opponentUserId = payment.getShipperUserId();
+        } else if (requesterUserId != null && requesterUserId.equals(payment.getShipperUserId())) {
+            opponentUserId = payment.getDriverUserId();
+        }
+
+        sendPaymentNotificationSafely(
+                opponentUserId,
+                "이의제기 등록",
+                String.format("결제 이의제기가 등록되었습니다. 사유: %s", reasonCode.name()),
+                orderId
+        );
+
+        usersRepository.findAllByRole(Role.ADMIN, Sort.by(Sort.Direction.ASC, "userId"))
+                .stream()
+                .filter(admin -> currentUser == null || !admin.getUserId().equals(currentUser.getUserId()))
+                .forEach(admin -> sendPaymentNotificationSafely(
+                        admin.getUserId(),
+                        "이의제기 접수",
+                        String.format("주문 %d 에 결제 이의제기가 접수되었습니다.", orderId),
+                        orderId
+                ));
+    }
+
+    private void notifyDisputeStatusUpdated(
+            TransportPayment payment,
+            PaymentDisputeStatus status,
+            Long orderId
+    ) {
+        String body = switch (status) {
+            case ADMIN_HOLD -> "이의제기가 검토 중입니다.";
+            case ADMIN_FORCE_CONFIRMED -> "이의제기 처리 결과 정산이 확정되었습니다.";
+            case ADMIN_REJECTED -> "이의제기가 반려되었습니다.";
+            case PENDING -> "이의제기가 접수되었습니다.";
+        };
+
+        sendPaymentNotificationSafely(
+                payment.getShipperUserId(),
+                "이의제기 처리 결과",
+                body,
+                orderId
+        );
+        sendPaymentNotificationSafely(
+                payment.getDriverUserId(),
+                "이의제기 처리 결과",
+                body,
+                orderId
+        );
+    }
+
+    private void sendPaymentNotificationSafely(Long recipientUserId, String title, String body, Long targetId) {
+        if (recipientUserId == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(recipientUserId, "PAYMENT", title, body, targetId);
+        } catch (Exception e) {
+            System.out.println("분쟁 알림 발송 중 예외 발생: " + e.getMessage());
         }
     }
 }

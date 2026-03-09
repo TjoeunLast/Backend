@@ -19,6 +19,7 @@ import com.example.project.domain.order.domain.Order.RouteStatResponse;
 import com.example.project.domain.order.domain.Order.RouteStatisticsResponse;
 import com.example.project.domain.order.dto.OrderResponse;
 import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.payment.repository.PaymentDisputeRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.proof.repository.ProofRepository;
@@ -38,6 +39,7 @@ public class AdminOrderService {
     private final PaymentDisputeRepository paymentDisputeRepository;
     private final ProofRepository proofRepository;
     private final UsersRepository usersRepository;
+    private final NotificationService notificationService;
 
     public void forceAllocateOrder(Long orderId, Long driverId, String adminEmail, String reason) {
         Order order = orderRepository.findById(orderId)
@@ -58,6 +60,17 @@ public class AdminOrderService {
                 .build();
         
         order.setAdminControl(control); // 연관관계 설정 시 Dirty Checking으로 자동 반영
+
+        sendOrderNotificationSafely(
+                order.getUser(),
+                "관리자 강제배차",
+                "관리자에 의해 배차가 확정되었습니다.",
+                order.getOrderId());
+        sendOrderNotificationSafely(
+                driverId,
+                "관리자 강제배차",
+                "관리자에 의해 배차가 확정되었습니다.",
+                order.getOrderId());
     }
 
     /**
@@ -78,6 +91,17 @@ public class AdminOrderService {
                 .build();
 
         order.setCancellationInfo(cancelInfo);
+
+        sendOrderNotificationSafely(
+                order.getUser(),
+                "관리자 주문 취소",
+                "관리자에 의해 주문이 취소되었습니다.",
+                order.getOrderId());
+        sendOrderNotificationSafely(
+                order.getDriverNo(),
+                "관리자 주문 취소",
+                "관리자에 의해 주문이 취소되었습니다.",
+                order.getOrderId());
     }
 
     @Transactional(readOnly = true)
@@ -278,4 +302,25 @@ public class AdminOrderService {
         };
     }
 
+    private void sendOrderNotificationSafely(Users recipient, String title, String body, Long orderId) {
+        if (recipient == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(recipient, "ORDER", title, body, orderId);
+        } catch (Exception e) {
+            System.out.println("관리자 오더 알림 발송 중 예외 발생: " + e.getMessage());
+        }
+    }
+
+    private void sendOrderNotificationSafely(Long driverNo, String title, String body, Long orderId) {
+        if (driverNo == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(driverNo, "ORDER", title, body, orderId);
+        } catch (Exception e) {
+            System.out.println("관리자 오더 알림 발송 중 예외 발생: " + e.getMessage());
+        }
+    }
 }
