@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.order.domain.AdminControl;
@@ -24,6 +25,8 @@ import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse;
 import com.example.project.domain.order.repository.OrderRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
+import com.example.project.global.image.ImageUploadResponse;
+import com.example.project.global.image.S3ImageService;
 import com.example.project.global.neighborhood.NeighborhoodService;
 import com.example.project.global.neighborhood.dto.NeighborhoodResponse;
 import com.example.project.member.domain.Driver;
@@ -42,6 +45,7 @@ public class OrderService {
     private final NeighborhoodService neighborhoodService;
     private final NotificationService notificationService; // [추가] 알림 서비스 주입
     private final TransportPaymentRepository transportPaymentRepository;
+    private final S3ImageService s3ImageService;
 
     /**
      * 1. 화주: 오더 생성 (C)
@@ -87,7 +91,7 @@ public class OrderService {
         if (order.getDriverList().contains(driverNo)) {
             throw new RuntimeException("이미 신청한 오더입니다.");
         }
-        
+
         try {
             if (order.getSnapshot().isInstant()) {
                 order.assignDriver(driverNo, "ACCEPTED");
@@ -103,9 +107,48 @@ public class OrderService {
             } else {
                 order.addToDriverList(driverNo);
             }
-        }catch (ObjectOptimisticLockingFailureException e) {
+        } catch (ObjectOptimisticLockingFailureException e) {
             // 🚩 동시성 충돌 발생 시
             throw new RuntimeException("아쉽게도 방금 다른 차주님이 배차를 수락하셨습니다.");
+        }
+    }
+
+    // [Create & Update] 프로필 이미지 등록/수정 (하나로 해결)
+    @Transactional
+    public String uploadProfileImage(Long orderId, MultipartFile file) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("유저가 없습니다."));
+
+        // 1. 기존 이미지가 이미 있으면 S3에서 먼저 삭제 (찌꺼기 제거)
+        if (order.getProfileImage() != null) {
+            s3ImageService.delete(order.getProfileImage().getS3Key());
+        }
+
+        // 2. 새 이미지 S3 업로드
+        ImageUploadResponse res = s3ImageService.upload(file, "profiles");
+
+        // 3. 유저 엔티티 필드 업데이트 (DB 저장)
+        order.updateProfileImage(res);
+        return res.getImageUrl();
+    }
+
+    // [Read] 프로필 이미지 경로 조회
+    @Transactional(readOnly = true)
+    public String getProfileImageUrl(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        return (order.getProfileImage() != null) ? order.getProfileImage().getImageUrl() : "기본이미지URL";
+    }
+
+    // [Delete] 프로필 이미지 삭제 (기본 이미지로 돌아가기)
+    @Transactional
+    public void deleteProfileImage(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElseThrow();
+
+        if (order.getProfileImage() != null) {
+            // 1. S3 실제 파일 삭제
+            s3ImageService.delete(order.getProfileImage().getS3Key());
+            // 2. 엔티티 필드 비우기
+            order.clearProfileImage();
         }
     }
 
@@ -116,15 +159,15 @@ public class OrderService {
     public List<OrderResponse> getAvailableOrders(Long userId) {
         String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
         List<Order> orders = orderRepository.findAvailableOrders("REQUESTED", now);
-        
+
         System.out.println(orders);
-        
-        for(int i=0; i<orders.size(); i++) {
-        	System.out.println(orders.indexOf(i));
+
+        for (int i = 0; i < orders.size(); i++) {
+            System.out.println(orders.indexOf(i));
         }
 
         return orders.stream()
-        		.map(order -> convertToResponse(order, userId))
+                .map(order -> convertToResponse(order, userId))
                 .collect(Collectors.toList());
     }
 
@@ -217,7 +260,7 @@ public class OrderService {
             order.getDriverList().remove(currentUser.getUserId());
             orderRepository.save(order);
             return; // 오더 자체가 취소되는 것은 아니므로 여기서 메서드 종료
-            
+
         } else if ("DRIVER".equals(role)) {
             // 이미 확정된 기사가 취소: 오더를 다시 REQUESTED로 초기화
             order.assignDriver(null, "REQUESTED");
@@ -246,12 +289,11 @@ public class OrderService {
             return "USER";
         if (order.getDriverNo() != null && order.getDriverNo().equals(user.getUserId()))
             return "DRIVER";
-        
+
         // 배차 신청만 한 상태
         if (order.getDriverList().contains(user.getUserId()))
             return "APPLICANT";
 
-        
         throw new RuntimeException("취소 권한이 없습니다.");
     }
 
@@ -270,7 +312,6 @@ public class OrderService {
         }
     }
 
-    
     public OrderResponse updateStatus(Long orderId, String newStatus, Long driverNo) {
         System.out.println("=== 상태 변경 시작 ===");
         System.out.println("입력 데이터 -> orderId: " + orderId + ", newStatus: " + newStatus + ", driverNo: " + driverNo);
@@ -309,12 +350,12 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
         // save 후 즉시 반영을 확인하고 싶다면 아래 주석 해제 (단, 로그 확인용)
-        // orderRepository.flush(); 
-        
+        // orderRepository.flush();
+
         System.out.println("Repository save 완료 (ID: " + savedOrder.getOrderId() + ")");
         System.out.println("=== 상태 변경 종료 ===");
-        
-     // 2. 에러가 숨어있는 곳을 잡기 위한 Try-Catch 덫
+
+        // 2. 에러가 숨어있는 곳을 잡기 위한 Try-Catch 덫
         try {
             return convertToResponse(order);
         } catch (Exception e) {
@@ -395,7 +436,7 @@ public class OrderService {
 
         // 3. 응답 변환
         return recommendedOrders.stream()
-        		.map(order -> convertToResponse(order, userId))
+                .map(order -> convertToResponse(order, userId))
                 .collect(Collectors.toList());
     }
 
@@ -409,7 +450,7 @@ public class OrderService {
                 .orElseThrow(() -> new RuntimeException("드라이버 프로필을 찾을 수 없습니다."));
         System.out.println(driver);
         System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        
+
         Long targetNbhId = nbhId;
 
         // 지역코드가 없고 주소가 있다면 주소를 통해 지역코드 추출
@@ -509,12 +550,12 @@ public class OrderService {
                 .orders(orderList)
                 .build();
     }
-    
+
     @Transactional
     public void cancelExpiredOrders() {
         // 1. 현재 시간 기준으로 24시간 전 시간 계산
         LocalDateTime threshold = LocalDateTime.now().minusDays(1);
-        
+
         // 2. 취소 대상 조회: 상태가 'REQUESTED'이고 상차 예정일이 24시간 이상 지난 오더들
         // (startSchedule이 String 형식이므로 DB 함수를 사용하여 비교하거나 로직상 처리가 필요합니다)
         List<Order> expiredOrders = orderRepository.findAll().stream()
@@ -522,7 +563,7 @@ public class OrderService {
                 .filter(o -> {
                     try {
                         // String 타입의 startSchedule을 LocalDateTime으로 변환 (패턴은 프로젝트 설정에 맞춤)
-                        LocalDateTime schedule = LocalDateTime.parse(o.getSnapshot().getStartSchedule(), 
+                        LocalDateTime schedule = LocalDateTime.parse(o.getSnapshot().getStartSchedule(),
                                 DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
                         return schedule.isBefore(threshold);
                     } catch (Exception e) {
@@ -534,7 +575,7 @@ public class OrderService {
         // 3. 대상 오더들 취소 처리
         for (Order order : expiredOrders) {
             order.changeStatus("CANCELLED");
-            
+
             // CancellationInfo 생성 및 저장
             CancellationInfo cancelInfo = CancellationInfo.builder()
                     .order(order)
@@ -542,13 +583,11 @@ public class OrderService {
                     .cancelledAt(LocalDateTime.now())
                     .cancelledBy("SYSTEM")
                     .build();
-            
+
             // 프로젝트 구조에 따라 cancelInfoRepository.save(cancelInfo) 호출 필요
-            order.setCancellationInfo(cancelInfo); 
+            order.setCancellationInfo(cancelInfo);
         }
     }
-    
-    
 
     private OrderResponse convertToResponse(Order order) {
         // 1. Embedded 객체 추출
@@ -617,8 +656,8 @@ public class OrderService {
                 .user(OrderResponse.UserSummary.from(order.getUser()))
                 .build();
     }
-    
- // OrderService.java 내부에 있는 메서드 교체
+
+    // OrderService.java 내부에 있는 메서드 교체
 
     private String resolveSettlementStatus(Order order) {
         if (order == null || order.getOrderId() == null) {
@@ -650,16 +689,18 @@ public class OrderService {
 
         // 2. 기존 팀원이 만든 메서드를 호출하여 기본 정보를 세팅합니다.
         OrderResponse res = convertToResponse(order);
-        if (res == null) return null;
+        if (res == null)
+            return null;
 
         // 3. 만약 내가 신청한 오더라면 상태를 APPLIED로 바꿉니다.
-        if ("REQUESTED".equals(res.getStatus()) && currentUserId != null && order.getDriverList().contains(currentUserId)) {
+        if ("REQUESTED".equals(res.getStatus()) && currentUserId != null
+                && order.getDriverList().contains(currentUserId)) {
             res.setStatus("APPLIED");
         }
         return res;
     }
-    
- // OrderService.java
+
+    // OrderService.java
 
     @Transactional
     public OrderResponse updateOrder(Long orderId, Users user, OrderRequest request) {
@@ -680,7 +721,7 @@ public class OrderService {
         Order patchOrder = Order.createOrder(user, request);
         Order savedOrder = orderRepository.save(patchOrder);
         return convertToResponse(savedOrder);
-        
+
     }
 
 }
