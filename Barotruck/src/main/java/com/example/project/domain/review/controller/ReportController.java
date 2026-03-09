@@ -41,8 +41,8 @@ public class ReportController {
     // 3. 상태별 신고 목록 조회 (ResponseDto 반환)
     @GetMapping("/status")
     public ResponseEntity<List<ReportResponseDto>> getReportsByStatus(
-            @RequestParam("status") String status) {
-        return ResponseEntity.ok(reportService.getReportsByStatus(status));
+            @RequestParam("type") String type) {
+        return ResponseEntity.ok(reportService.getReportsByStatus(type));
     }
 
     // 전체 신고 목록 조회 (관리자용, 최신순)

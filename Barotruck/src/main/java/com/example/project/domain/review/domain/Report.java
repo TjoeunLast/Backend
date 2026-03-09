@@ -33,7 +33,7 @@ public class Report {
 
  // 신고와 관련된 오더 (shipmentId 대신 orderId 사용)
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
+    @JoinColumn(name = "order_id", nullable = true)
     private Order order;
 
     // 신고자
@@ -43,18 +43,25 @@ public class Report {
     
     // 신고 대상자
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "target_id", nullable = false)
+    @JoinColumn(name = "target_id", nullable = true)
     private Users target;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String reportType; // ACCIDENT, NO_SHOW, RUDE, ETC
 
-    @Column(length = 2000, nullable = false)
+    @Column(length = 2000, nullable = true)
     private String description;
 
     @Column(nullable = false)
     private String status = "PENDING"; // PENDING, PROCESSING, RESOLVED
 
+    @Column(nullable = true)
+    private String type; // REPORT, DISCUSS
+    
+    private String email; // email
+    
+    private String title; // title
+    
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }
