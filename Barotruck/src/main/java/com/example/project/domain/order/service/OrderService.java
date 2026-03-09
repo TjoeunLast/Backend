@@ -24,11 +24,13 @@ import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse;
 import com.example.project.domain.order.repository.OrderRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
+import com.example.project.domain.payment.service.core.TransportPaymentService;
 import com.example.project.global.neighborhood.NeighborhoodService;
 import com.example.project.global.neighborhood.dto.NeighborhoodResponse;
 import com.example.project.member.domain.Driver;
 import com.example.project.member.domain.Users;
 import com.example.project.member.repository.DriverRepository;
+import com.example.project.member.repository.UsersRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,6 +44,8 @@ public class OrderService {
     private final NeighborhoodService neighborhoodService;
     private final NotificationService notificationService; // [추가] 알림 서비스 주입
     private final TransportPaymentRepository transportPaymentRepository;
+    private final TransportPaymentService transportPaymentService;
+    private final UsersRepository usersRepository;
 
     /**
      * 1. 화주: 오더 생성 (C)
@@ -144,6 +148,11 @@ public class OrderService {
     public void forceAllocateOrder(Long orderId, Long driverId, String adminEmail, String reason) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+        Users driver = usersRepository.findByUserId(driverId)
+                .orElseThrow(() -> new RuntimeException("차주를 찾을 수 없습니다."));
+        if (driver.isAdminForceAllocateBlocked()) {
+            throw new IllegalStateException("해당 차주는 관리자 강제배차를 허용하지 않았습니다.");
+        }
 
         // 1. 오더 상태 및 차주 변경
         order.assignDriver(driverId, "ALLOCATED");
@@ -308,6 +317,15 @@ public class OrderService {
         System.out.println("엔티티 상태 변경 후: " + order.getStatus());
 
         Order savedOrder = orderRepository.save(order);
+
+        if ("COMPLETED".equals(normalizedStatus)) {
+            try {
+                transportPaymentService.ensureReadyPaymentRecord(orderId);
+            } catch (Exception e) {
+                System.err.println("결제 READY 레코드 생성 실패: " + e.getMessage());
+            }
+        }
+
         // save 후 즉시 반영을 확인하고 싶다면 아래 주석 해제 (단, 로그 확인용)
         // orderRepository.flush(); 
         

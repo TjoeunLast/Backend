@@ -16,6 +16,7 @@ public interface OrderPort {
             Long shipperUserId,
             Long driverUserId,
             BigDecimal amount,
-            String status
+            String status,
+            String payMethod
     ) {}
 }

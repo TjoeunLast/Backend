@@ -92,6 +92,10 @@ public class Users implements UserDetails {
     @Builder.Default
     private Long user_level = 0L; // 등급 필드: 기본값 0 배정
 
+    @Builder.Default
+    @Column(name = "admin_force_allocate_blocked", columnDefinition = "NUMBER(1,0) DEFAULT 0")
+    private Boolean adminForceAllocateBlocked = false;
+
     // User.java 내부
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private Shipper shipper;
@@ -146,6 +150,10 @@ public class Users implements UserDetails {
     // 등급 업데이트 메서드 (필요시)
     public void updateLevel(Long newLevel) {
         this.user_level = newLevel;
+    }
+
+    public boolean isAdminForceAllocateBlocked() {
+        return Boolean.TRUE.equals(this.adminForceAllocateBlocked);
     }
 
     @Override

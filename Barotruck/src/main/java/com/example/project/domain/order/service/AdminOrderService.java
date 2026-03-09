@@ -23,6 +23,7 @@ import com.example.project.domain.payment.repository.PaymentDisputeRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.proof.repository.ProofRepository;
 import com.example.project.member.domain.Users;
+import com.example.project.member.repository.UsersRepository;
 import com.example.project.security.user.Role;
 
 import lombok.RequiredArgsConstructor;
@@ -36,10 +37,16 @@ public class AdminOrderService {
     private final TransportPaymentRepository transportPaymentRepository;
     private final PaymentDisputeRepository paymentDisputeRepository;
     private final ProofRepository proofRepository;
+    private final UsersRepository usersRepository;
 
     public void forceAllocateOrder(Long orderId, Long driverId, String adminEmail, String reason) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+        Users driver = usersRepository.findByUserId(driverId)
+                .orElseThrow(() -> new RuntimeException("차주를 찾을 수 없습니다."));
+        if (driver.isAdminForceAllocateBlocked()) {
+            throw new IllegalStateException("해당 차주는 관리자 강제배차를 허용하지 않았습니다.");
+        }
 
         order.assignDriver(driverId, "ALLOCATED"); // 도메인 메서드 호출
 
