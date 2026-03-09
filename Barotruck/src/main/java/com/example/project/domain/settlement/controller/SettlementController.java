@@ -1,16 +1,15 @@
 package com.example.project.domain.settlement.controller;
 
 import com.example.project.domain.settlement.dto.SettlementRegionStatResponse;
-import com.example.project.domain.settlement.dto.SettlementRequest;
 import com.example.project.domain.settlement.dto.SettlementResponse;
 import com.example.project.domain.settlement.dto.SettlementStatusSummaryResponse;
 import com.example.project.domain.settlement.dto.SettlementSummaryResponse;
+import com.example.project.domain.settlement.dto.UpdateSettlementStatusRequest;
 import com.example.project.domain.settlement.service.SettlementService;
 import com.example.project.global.api.ApiResponse;
 import com.example.project.member.domain.Users;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -24,25 +23,6 @@ import java.util.List;
 public class SettlementController {
 
     private final SettlementService settlementService;
-
-    // 기존 호환 API
-    @PostMapping("/init")
-    @PreAuthorize("hasAnyRole('SHIPPER','ADMIN')")
-    public ResponseEntity<String> init(
-            @RequestBody SettlementRequest request,
-            @AuthenticationPrincipal Users user
-    ) {
-        settlementService.initiateSettlement(request, user);
-        return ResponseEntity.ok("결제 준비가 완료되었습니다.");
-    }
-
-    // 기존 호환 API
-    @PatchMapping("/{orderId}/complete")
-    @PreAuthorize("hasAnyRole('SHIPPER','ADMIN')")
-    public ResponseEntity<String> complete(@PathVariable("orderId") Long orderId) {
-        settlementService.completeSettlement(orderId);
-        return ResponseEntity.ok("결제가 성공적으로 완료되었습니다.");
-    }
 
     @GetMapping("/orders/{orderId}")
     @PreAuthorize("isAuthenticated()")
@@ -62,13 +42,14 @@ public class SettlementController {
         return ApiResponse.ok(settlementService.getMySettlements(currentUser, status));
     }
 
-    @PatchMapping("/orders/{orderId}/complete-by-user")
-    @PreAuthorize("hasAnyRole('SHIPPER','ADMIN')")
-    public ApiResponse<SettlementResponse> completeByUser(
+    @PatchMapping("/orders/{orderId}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<SettlementResponse> updateStatus(
             @PathVariable("orderId") Long orderId,
+            @RequestBody UpdateSettlementStatusRequest request,
             @AuthenticationPrincipal Users currentUser
     ) {
-        return ApiResponse.ok(settlementService.completeSettlementByUser(orderId, currentUser));
+        return ApiResponse.ok(settlementService.updateSettlementStatus(orderId, request, currentUser));
     }
 
     @GetMapping("/admin/summary")

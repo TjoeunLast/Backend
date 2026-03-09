@@ -7,6 +7,7 @@ import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.Paymen
 import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisputeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossConfirmRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossPrepareRequest;
+import com.example.project.domain.payment.dto.paymentRequest.UpdateTransportPaymentStatusRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdatePaymentDisputeStatusRequest;
 import com.example.project.domain.payment.dto.paymentResponse.TossPrepareResponse;
 import com.example.project.global.toss.service.TossPaymentService;
@@ -22,6 +23,7 @@ public class TransportPaymentService {
 
     private final PaymentLifecycleService paymentLifecycleService;
     private final PaymentDisputeService paymentDisputeService;
+    private final AdminTransportPaymentStatusService adminTransportPaymentStatusService;
     private final TossPaymentService tossPaymentService;
 
     public TransportPayment markPaid(
@@ -58,6 +60,14 @@ public class TransportPaymentService {
             UpdatePaymentDisputeStatusRequest request
     ) {
         return paymentDisputeService.updateDisputeStatus(currentUser, orderId, disputeId, request);
+    }
+
+    public TransportPayment updateAdminStatus(
+            Users currentUser,
+            Long orderId,
+            UpdateTransportPaymentStatusRequest request
+    ) {
+        return adminTransportPaymentStatusService.updateStatus(currentUser, orderId, request);
     }
 
     public TossPrepareResponse prepareTossPayment(
