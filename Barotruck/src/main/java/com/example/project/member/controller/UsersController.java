@@ -3,6 +3,7 @@ package com.example.project.member.controller;
 import java.security.Principal;
 import java.util.Map;
 
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -11,7 +12,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -113,4 +113,36 @@ public class UsersController {
         return ResponseEntity.ok(userInfo);
     }
 
+    /**
+     * 프로필 이미지 등록 및 수정
+     * POST /api/v1/users/me/image
+     * form-data key: "image"
+     */
+    @PostMapping(value = "/me/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<String> uploadProfileImage(
+            @AuthenticationPrincipal Users user,
+            @RequestParam("image") MultipartFile file) {
+        String imageUrl = service.uploadProfileImage(user.getUserId(), file);
+        return ResponseEntity.ok(imageUrl);
+    }
+
+    /**
+     * 프로필 이미지 조회
+     * GET /api/v1/users/me/image
+     */
+    @GetMapping("/me/image")
+    public ResponseEntity<String> getProfileImage(@AuthenticationPrincipal Users user) {
+        String imageUrl = service.getProfileImageUrl(user.getUserId());
+        return ResponseEntity.ok(imageUrl);
+    }
+
+    /**
+     * 프로필 이미지 삭제
+     * DELETE /api/v1/users/me/image
+     */
+    @DeleteMapping("/me/image")
+    public ResponseEntity<String> deleteProfileImage(@AuthenticationPrincipal Users user) {
+    	service.deleteProfileImage(user.getUserId());
+        return ResponseEntity.ok("프로필 이미지가 삭제되었습니다.");
+    }
 }

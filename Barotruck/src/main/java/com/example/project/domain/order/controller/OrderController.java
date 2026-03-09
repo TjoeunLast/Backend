@@ -3,8 +3,10 @@ package com.example.project.domain.order.controller;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.example.project.domain.order.dto.MyRevenueResponse;
 import com.example.project.domain.order.dto.OrderRequest;
@@ -204,7 +207,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.searchOrders(user, nbhId, address));
     }
 
- // OrderController.java
+    // OrderController.java
 
     @PutMapping("/{orderId}")
     public ResponseEntity<String> updateOrder(
@@ -213,5 +216,38 @@ public class OrderController {
             @RequestBody OrderRequest request) {
         orderService.updateOrder(orderId, user, request);
         return ResponseEntity.ok("오더 정보가 성공적으로 수정되었습니다.");
+    }
+
+    /**
+     * 오더 이미지 등록 및 수정
+     * POST /api/v1/orders/{orderId}/image
+     * form-data key: "image"
+     */
+    @PostMapping(value = "/{orderId}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<String> uploadOrderImage(
+            @PathVariable("orderId") Long orderId,
+            @RequestParam("image") MultipartFile file) {
+        String imageUrl = orderService.uploadProfileImage(orderId, file);
+        return ResponseEntity.ok(imageUrl);
+    }
+
+    /**
+     * 오더 이미지 조회
+     * GET /api/v1/orders/{orderId}/image
+     */
+    @GetMapping("/{orderId}/image")
+    public ResponseEntity<String> getOrderImage(@PathVariable("orderId") Long orderId) {
+        String imageUrl = orderService.getProfileImageUrl(orderId);
+        return ResponseEntity.ok(imageUrl);
+    }
+
+    /**
+     * 오더 이미지 삭제
+     * DELETE /api/v1/orders/{orderId}/image
+     */
+    @DeleteMapping("/{orderId}/image")
+    public ResponseEntity<String> deleteOrderImage(@PathVariable("orderId") Long orderId) {
+        orderService.deleteProfileImage(orderId);
+        return ResponseEntity.ok("오더 이미지가 삭제되었습니다.");
     }
 }

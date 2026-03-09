@@ -13,6 +13,8 @@ import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.review.domain.Report;
 import com.example.project.domain.review.domain.Review;
 import com.example.project.domain.settlement.domain.Settlement;
+import com.example.project.global.image.ImageInfo;
+import com.example.project.global.image.ImageUploadResponse;
 import com.example.project.member.domain.Users; // 사용자 엔티티
 
 import jakarta.persistence.CascadeType;
@@ -260,6 +262,22 @@ public class Order {
         }
     }
 
+    
+
+    @Embedded
+    private ImageInfo profileImage;
+
+    // 이미지 업데이트 편의 메서드
+    public void updateProfileImage(ImageUploadResponse res) {
+        this.profileImage = new ImageInfo(res);
+    }
+
+    // 이미지 삭제(초기화) 메서드
+    public void clearProfileImage() {
+        this.profileImage = null;
+    }
+
+    
     public static Order createOrder(Users user, OrderRequest request) {
         // 1. 변하지 않는 상세 정보를 한데 묶음
         OrderSnapshot snapshot = OrderSnapshot.builder()
@@ -293,6 +311,7 @@ public class Order {
                 .instant(request.isInstant())
                 .memo(request.getMemo())
                 .tag(request.getTag())
+                
                 .build();
 
         // 2. 최종 Order 객체 생성

@@ -92,6 +92,8 @@ public class OrderResponse {
     private PaymentSummary paymentSummary;
     private ProofSummary proofSummary;
     private DisputeSummary disputeSummary;
+    private String profileImageUrl;
+
 
     public static OrderResponse from(Order order) {
         OrderSnapshot s = order.getSnapshot();
@@ -116,6 +118,7 @@ public class OrderResponse {
                 .distance(order.getDistance())
                 .duration(order.getDuration())
                 .driverList(safeDriverList)
+                .profileImageUrl(order.getProfileImage() != null ? order.getProfileImage().getImageUrl() : "")
                 
                 // Snapshot 데이터 매핑
                 .startLat(s.getStartLat())
