@@ -110,6 +110,13 @@ public class UsersService {
         user.updateFcmToken(fcmToken);
     }
 
+    @Transactional
+    public void updateAdminForceAllocateBlocked(Long userId, boolean blocked) {
+        Users user = repository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 사용자를 찾을 수 없습니다. ID: " + userId));
+        user.setAdminForceAllocateBlocked(blocked);
+    }
+
     // [Create & Update] 프로필 이미지 등록/수정 (하나로 해결)
     @Transactional
     public void uploadProfileImage(Long userId, MultipartFile file) {

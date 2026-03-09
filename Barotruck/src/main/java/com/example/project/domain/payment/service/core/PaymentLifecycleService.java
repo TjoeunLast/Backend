@@ -69,22 +69,10 @@ public class PaymentLifecycleService {
                 firstPaymentPromoEligible
         );
 
-        TransportPayment transportPayment = transportPaymentRepository.findByOrderId(orderId).orElse(null);
+        TransportPayment transportPayment = transportPaymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalStateException("transport payment not initialized. orderId=" + orderId));
         PaymentMethod effectiveMethod = resolveManualPaymentMethod(method, transportPayment);
         validateManualPaymentProof(effectiveMethod, proofUrl);
-        if (transportPayment == null) {
-            transportPayment = TransportPayment.ready(
-                    orderId,
-                    snap.shipperUserId(),
-                    snap.driverUserId(),
-                    fee.chargedAmount(),
-                    fee.feeRate(),
-                    fee.feeAmount(),
-                    fee.driverAmount(),
-                    effectiveMethod,
-                    resolvePaymentTiming(paymentTiming)
-            );
-        }
         transportPayment.applyPricingSnapshots(
                 fee.chargedAmount(),
                 fee.feeRate(),
@@ -159,17 +147,7 @@ public class PaymentLifecycleService {
         );
 
         TransportPayment payment = transportPaymentRepository.findByOrderId(tx.getOrderId())
-                .orElseGet(() -> TransportPayment.ready(
-                        tx.getOrderId(),
-                        snap.shipperUserId(),
-                        snap.driverUserId(),
-                        tx.getAmount(),
-                        fee.feeRate(),
-                        fee.feeAmount(),
-                        fee.driverAmount(),
-                        tx.getMethod(),
-                        resolveGatewayPaymentTiming(tx)
-                ));
+                .orElseThrow(() -> new IllegalStateException("transport payment not initialized. orderId=" + tx.getOrderId()));
 
         payment.applyPaymentTiming(resolveGatewayPaymentTiming(tx));
         payment.applyPricingSnapshots(
@@ -203,6 +181,52 @@ public class PaymentLifecycleService {
         TransportPayment saved = transportPaymentRepository.save(payment);
         upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), snap.amount(), fee);
         return saved;
+    }
+
+    @Transactional
+    public TransportPayment ensureReadyPaymentRecord(Long orderId) {
+        OrderPort.OrderSnapshot snap = orderPort.getRequiredSnapshot(orderId);
+        validatePaymentStartOrderStatus(snap.status());
+        if (snap.driverUserId() == null) {
+            throw new IllegalStateException("assigned driver not found");
+        }
+
+        TransportPayment existing = transportPaymentRepository.findByOrderId(orderId).orElse(null);
+        if (existing != null) {
+            return existing;
+        }
+
+        PaymentMethod orderMethod = resolveOrderPaymentMethod(snap.payMethod());
+        if (orderMethod == null) {
+            return null;
+        }
+
+        Long userLevel = userPort.getRequiredUser(snap.shipperUserId()).userLevel();
+        boolean firstPaymentPromoEligible =
+                transportPaymentRepository.countByShipperUserIdAndStatusIn(
+                        snap.shipperUserId(),
+                        paidOrConfirmedStatuses()
+                ) == 0;
+
+        FeePolicyService.FeeResult fee = feePolicyService.calculate(
+                snap.amount(),
+                userLevel,
+                firstPaymentPromoEligible
+        );
+
+        TransportPayment readyPayment = TransportPayment.ready(
+                orderId,
+                snap.shipperUserId(),
+                snap.driverUserId(),
+                fee.chargedAmount(),
+                fee.feeRate(),
+                fee.feeAmount(),
+                fee.driverAmount(),
+                orderMethod,
+                PaymentTiming.POSTPAID
+        );
+
+        return transportPaymentRepository.save(readyPayment);
     }
 
     private void upsertSettlementOnPaid(Long orderId, Long shipperUserId, BigDecimal grossAmount, FeePolicyService.FeeResult fee) {
@@ -268,6 +292,33 @@ public class PaymentLifecycleService {
 
     private PaymentTiming resolveGatewayPaymentTiming(PaymentGatewayTransaction tx) {
         return PaymentTiming.POSTPAID;
+    }
+
+    private PaymentMethod resolveOrderPaymentMethod(String rawPayMethod) {
+        String value = rawPayMethod == null ? "" : rawPayMethod.trim().toUpperCase(Locale.ROOT);
+        if (value.isEmpty()) {
+            return null;
+        }
+        if (value.contains("CARD") || value.contains("TOSS") || value.contains("카드")) {
+            return PaymentMethod.CARD;
+        }
+        if (value.contains("TRANSFER") || value.contains("계좌")) {
+            return PaymentMethod.TRANSFER;
+        }
+        if (
+                value.contains("CASH") ||
+                value.contains("현금") ||
+                value.contains("착불") ||
+                value.contains("선불") ||
+                value.contains("PREPAID") ||
+                value.contains("POSTPAID")
+        ) {
+            return PaymentMethod.CASH;
+        }
+        if (value.contains("RECEIPT") || value.contains("영수증") || value.contains("MONTH") || value.contains("월말")) {
+            return null;
+        }
+        return PaymentMethod.CASH;
     }
 
     private PaymentMethod resolveManualPaymentMethod(PaymentMethod requestedMethod, TransportPayment existing) {

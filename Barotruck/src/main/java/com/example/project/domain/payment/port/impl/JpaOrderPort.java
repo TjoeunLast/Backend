@@ -75,7 +75,8 @@ public class JpaOrderPort implements OrderPort {
                 order.getUser() != null ? order.getUser().getUserId() : null,
                 order.getDriverNo(),
                 amount,
-                order.getStatus()
+                order.getStatus(),
+                snap.getPayMethod()
         );
     }
 
