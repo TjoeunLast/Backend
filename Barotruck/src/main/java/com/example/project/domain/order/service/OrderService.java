@@ -106,6 +106,12 @@ public class OrderService {
                         order.getOrderId());
             } else {
                 order.addToDriverList(driverNo);
+                sendOrderNotificationSafely(
+                        order.getUser(),
+                        "배차 지원 도착",
+                        String.format("새로운 기사님이 오더에 지원했습니다. (차량번호: %s)",
+                                driverRepository.findById(driverNo).map(Driver::getCarNum).orElse("정보 없음")),
+                        order.getOrderId());
             }
         }catch (ObjectOptimisticLockingFailureException e) {
             // 🚩 동시성 충돌 발생 시
@@ -246,6 +252,20 @@ public class OrderService {
 
         order.setCancellationInfo(cancelInfo);
         orderRepository.save(order);
+
+        if ("DRIVER".equals(role)) {
+            sendOrderNotificationSafely(
+                    order.getUser(),
+                    "차주 배차 취소",
+                    "배정된 차주가 주문을 취소했습니다.",
+                    order.getOrderId());
+        } else if ("USER".equals(role) && order.getDriverNo() != null) {
+            sendOrderNotificationSafely(
+                    order.getDriverNo(),
+                    "주문 취소",
+                    "화주가 주문을 취소했습니다.",
+                    order.getOrderId());
+        }
     }
 
     private String determineCancelRole(Order order, Users user) {
@@ -473,6 +493,12 @@ public class OrderService {
 
         // 4. 선택되지 않은 나머지 신청자 명단은 비워주기 (선택 사항)
         order.getDriverList().clear();
+
+        sendOrderNotificationSafely(
+                selectedDriverNo,
+                "배차 확정",
+                "화주가 회원님을 최종 기사로 선택했습니다.",
+                order.getOrderId());
     }
 
     /**
@@ -675,6 +701,28 @@ public class OrderService {
             res.setStatus("APPLIED");
         }
         return res;
+    }
+
+    private void sendOrderNotificationSafely(Users recipient, String title, String body, Long orderId) {
+        if (recipient == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(recipient, "ORDER", title, body, orderId);
+        } catch (Exception e) {
+            System.out.println("오더 알림 발송 중 예외 발생: " + e.getMessage());
+        }
+    }
+
+    private void sendOrderNotificationSafely(Long driverNo, String title, String body, Long orderId) {
+        if (driverNo == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(driverNo, "ORDER", title, body, orderId);
+        } catch (Exception e) {
+            System.out.println("오더 알림 발송 중 예외 발생: " + e.getMessage());
+        }
     }
     
  // OrderService.java
