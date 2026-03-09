@@ -119,7 +119,18 @@ public class SecurityConfiguration {
         CorsConfiguration config = new CorsConfiguration();
 
         // ⭐ 리액트 주소
-        config.setAllowedOrigins(List.of("http://localhost:3000"));
+        config.setAllowedOrigins(List.of(
+                "http://localhost:3000",
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
+                "http://yangtheory.site:8080",
+                "http://localhost:8081",
+                "http://127.0.0.1:8081",
+                "http://yangtheory.site:8081",
+                "http://localhost:8082",
+                "http://127.0.0.1:8082",
+                "http://yangtheory.site:8082"
+        ));
 
         // 허용 메서드
         config.setAllowedMethods(List.of(

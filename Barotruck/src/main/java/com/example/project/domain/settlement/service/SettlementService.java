@@ -8,6 +8,7 @@ import com.example.project.domain.settlement.domain.SettlementStatus;
 import com.example.project.domain.settlement.dto.SettlementRegionStatResponse;
 import com.example.project.domain.settlement.dto.SettlementRequest;
 import com.example.project.domain.settlement.dto.SettlementResponse;
+import com.example.project.domain.settlement.dto.SettlementStatusSummaryResponse;
 import com.example.project.domain.settlement.dto.SettlementSummaryResponse;
 import com.example.project.domain.settlement.repository.SettlementRepository;
 import com.example.project.member.domain.Users;
@@ -148,6 +149,30 @@ public class SettlementService {
                 .platformRevenue(toLong(row[1]))
                 .totalDiscount(toLong(row[2]))
                 .count(toLong(row[3]))
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public SettlementStatusSummaryResponse getSettlementStatusSummary() {
+        Object[] row = settlementRepository.getSettlementStatusSummary(SettlementStatus.COMPLETED);
+        if (row == null || row.length < 6) {
+            return SettlementStatusSummaryResponse.builder()
+                    .totalAmount(0L)
+                    .pendingAmount(0L)
+                    .completedAmount(0L)
+                    .totalCount(0L)
+                    .pendingCount(0L)
+                    .completedCount(0L)
+                    .build();
+        }
+
+        return SettlementStatusSummaryResponse.builder()
+                .totalAmount(toLong(row[0]))
+                .pendingAmount(toLong(row[1]))
+                .completedAmount(toLong(row[2]))
+                .totalCount(toLong(row[3]))
+                .pendingCount(toLong(row[4]))
+                .completedCount(toLong(row[5]))
                 .build();
     }
 
