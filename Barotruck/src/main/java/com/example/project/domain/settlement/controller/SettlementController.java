@@ -3,6 +3,7 @@ package com.example.project.domain.settlement.controller;
 import com.example.project.domain.settlement.dto.SettlementRegionStatResponse;
 import com.example.project.domain.settlement.dto.SettlementRequest;
 import com.example.project.domain.settlement.dto.SettlementResponse;
+import com.example.project.domain.settlement.dto.SettlementStatusSummaryResponse;
 import com.example.project.domain.settlement.dto.SettlementSummaryResponse;
 import com.example.project.domain.settlement.service.SettlementService;
 import com.example.project.global.api.ApiResponse;
@@ -90,5 +91,11 @@ public class SettlementController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
     ) {
         return ApiResponse.ok(settlementService.getSettlementRegionStats(start, end));
+    }
+
+    @GetMapping("/admin/status-summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<SettlementStatusSummaryResponse> getStatusSummary() {
+        return ApiResponse.ok(settlementService.getSettlementStatusSummary());
     }
 }
