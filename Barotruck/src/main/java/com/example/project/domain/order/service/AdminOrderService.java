@@ -55,7 +55,7 @@ public class AdminOrderService {
         AdminControl control = AdminControl.builder()
                 .isForced("Y")
                 .paidAdmin(adminEmail)
-                .paidReason(normalizeReason(reason))
+                .paidReason(reason)
                 .allocated(LocalDateTime.now())
                 .build();
         
