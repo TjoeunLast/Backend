@@ -64,6 +64,13 @@ public class NotificationService {
             }
         }
     }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void sendNotification(Long DriverNo, String type, String title, String body, Long targetId) {
+        Users user = usersRepository.findById(DriverNo)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        sendNotification(user, type, title, body, targetId);
+    }
     
     public List<NotificationResponse> getNotifications(Long userId) {
         Users user = usersRepository.findById(userId)
