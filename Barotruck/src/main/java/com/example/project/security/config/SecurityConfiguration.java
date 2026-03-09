@@ -56,6 +56,7 @@ public class SecurityConfiguration {
             "/api/proof/**",
             "/api/v1/orders", // 오더
             "/api/notifications/**",  // 알림
+            "/api/notices/**",
             "/api/reports/**", // 신고
             "/api/reviews/**", // 리뷰
             "/ws-stomp/**",      // 1. 웹소켓 엔드포인트 추가

@@ -25,17 +25,17 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final UsersRepository usersRepository;
 
- // 🚩 핵심 1: REQUIRES_NEW를 적용하여, 여기서 에러가 나도 오더 상태 업데이트(본체)는 롤백되지 않게 격리합니다.
+    // 🚩 핵심 1: REQUIRES_NEW를 적용하여, 여기서 에러가 나도 오더 상태 업데이트(본체)는 롤백되지 않게 격리합니다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendNotification(Users user, String type, String title, String body, Long targetId) {
         // 1. DB에 알림 내역 기록
         Notification notification = Notification.builder()
-                .user(user)
-                .type(type)
-                .title(title)
-                .body(body)
-                .targetType(type)
-                .targetId(targetId)
+                .user(user) // 알림을 받는 사람
+                .type(type)	// 타입
+                .title(title) // 제목
+                .body(body) // 내용
+                .targetType(type) //타입2
+                .targetId(targetId) // orderId
                 .build();
         notificationRepository.save(notification);
 

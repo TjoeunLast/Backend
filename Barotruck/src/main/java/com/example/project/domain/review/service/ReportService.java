@@ -47,14 +47,17 @@ public class ReportService {
                 .description(dto.getDescription())
                 .status("PENDING")
                 .createdAt(LocalDateTime.now())
+                .type(dto.getType())
+                .email(dto.getEmail())
+                .title(dto.getTitle())
                 .build();
 
         reportRepository.save(report);
     }
 
     @Transactional(readOnly = true)
-    public List<ReportResponseDto> getReportsByStatus(String status) {
-        return reportRepository.findByStatus(status).stream()
+    public List<ReportResponseDto> getReportsByStatus(String type) {
+        return reportRepository.findByType(type).stream()
                 .map(ReportResponseDto::new)
                 .collect(Collectors.toList());
     }
