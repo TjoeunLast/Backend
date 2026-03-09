@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.repository.OrderRepository;
 import com.example.project.domain.review.domain.Report;
@@ -16,6 +18,7 @@ import com.example.project.domain.review.dto.ReportResponseDto;
 import com.example.project.domain.review.repository.ReportRepository;
 import com.example.project.member.domain.Users;
 import com.example.project.member.repository.UsersRepository;
+import com.example.project.security.user.Role;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +31,7 @@ public class ReportService {
     private final ReportRepository reportRepository;
     private final OrderRepository orderRepository; // 추가 필요
     private final UsersRepository userRepository; // 추가 필요
+    private final NotificationService notificationService;
 
     @Transactional
     public void createReport(ReportRequestDto dto, Users currentUser) {
@@ -49,7 +53,8 @@ public class ReportService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        reportRepository.save(report);
+        Report saved = reportRepository.save(report);
+        sendReportNotificationToAdmins(saved);
     }
 
     @Transactional(readOnly = true)
@@ -64,6 +69,12 @@ public class ReportService {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new IllegalArgumentException("신고 내역이 없습니다."));
         report.setStatus(newStatus);
+        sendReportNotificationSafely(
+                report.getReporter(),
+                "신고 처리 상태 변경",
+                "신고 상태가 '" + newStatus + "'(으)로 변경되었습니다.",
+                report.getReportId()
+        );
     }
 
     @Transactional
@@ -101,8 +112,14 @@ public class ReportService {
 
     // 비동기 알림 (이전 답변 코드 유지)
     @Async
-    protected void sendReportNotificationToAdmin(Report report) {
-        // ... (주석 처리된 이메일/SMS 발송 로직) // 이거말고 그냥 알림처리로 신고됬다고 할듯
+    protected void sendReportNotificationToAdmins(Report report) {
+        userRepository.findAllByRole(Role.ADMIN, Sort.by(Sort.Direction.ASC, "userId"))
+                .forEach(admin -> sendReportNotificationSafely(
+                        admin,
+                        "신고 접수",
+                        String.format("주문 %d 에 대한 신고가 접수되었습니다.", report.getOrder().getOrderId()),
+                        report.getReportId()
+                ));
     }
 
     @Transactional(readOnly = true)
@@ -119,6 +136,17 @@ public class ReportService {
                 .stream()
                 .map(ReportResponseDto::new)
                 .collect(Collectors.toList());
+    }
+
+    private void sendReportNotificationSafely(Users recipient, String title, String body, Long targetId) {
+        if (recipient == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(recipient, "REPORT", title, body, targetId);
+        } catch (Exception e) {
+            log.warn("신고 알림 발송 실패: {}", e.getMessage());
+        }
     }
 
 }

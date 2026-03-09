@@ -1,6 +1,7 @@
 package com.example.project.domain.payment.service.core;
 
 import com.example.project.domain.order.domain.Order;
+import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.payment.domain.PaymentGatewayTransaction;
 import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
@@ -34,6 +35,7 @@ public class PaymentLifecycleService {
     private final FeePolicyService feePolicyService;
     private final SettlementRepository settlementRepository;
     private final EntityManager entityManager;
+    private final NotificationService notificationService;
 
     @Transactional
     public TransportPayment markPaid(
@@ -79,6 +81,9 @@ public class PaymentLifecycleService {
                 fee.feeAmount(),
                 fee.driverAmount()
         );
+        boolean shouldNotifyDriver = transportPayment.getStatus() != TransportPaymentStatus.PAID
+                && transportPayment.getStatus() != TransportPaymentStatus.CONFIRMED
+                && transportPayment.getStatus() != TransportPaymentStatus.ADMIN_FORCE_CONFIRMED;
 
         if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED
                 || transportPayment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED) {
@@ -91,6 +96,14 @@ public class PaymentLifecycleService {
 
         TransportPayment saved = transportPaymentRepository.save(transportPayment);
         upsertSettlementOnPaid(orderId, snap.shipperUserId(), snap.amount(), fee);
+        if (shouldNotifyDriver) {
+            sendPaymentNotificationSafely(
+                    snap.driverUserId(),
+                    "화주 결제 완료",
+                    "화주가 결제를 완료했습니다. 최종 확인을 진행해주세요.",
+                    orderId
+            );
+        }
         return saved;
     }
 
@@ -120,6 +133,12 @@ public class PaymentLifecycleService {
 
         TransportPayment saved = transportPaymentRepository.save(payment);
         completeSettlementOnConfirm(orderId);
+        sendPaymentNotificationSafely(
+                payment.getShipperUserId(),
+                "정산 확인 완료",
+                "차주가 결제를 최종 확인했습니다.",
+                orderId
+        );
         return saved;
     }
 
@@ -180,6 +199,12 @@ public class PaymentLifecycleService {
 
         TransportPayment saved = transportPaymentRepository.save(payment);
         upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), snap.amount(), fee);
+        sendPaymentNotificationSafely(
+                snap.driverUserId(),
+                "화주 결제 완료",
+                "화주가 결제를 완료했습니다. 최종 확인을 진행해주세요.",
+                tx.getOrderId()
+        );
         return saved;
     }
 
@@ -258,6 +283,17 @@ public class PaymentLifecycleService {
 
         settlement.setStatus(SettlementStatus.COMPLETED);
         settlementRepository.save(settlement);
+    }
+
+    private void sendPaymentNotificationSafely(Long recipientUserId, String title, String body, Long targetId) {
+        if (recipientUserId == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(recipientUserId, "PAYMENT", title, body, targetId);
+        } catch (Exception e) {
+            System.out.println("결제 알림 발송 중 예외 발생: " + e.getMessage());
+        }
     }
 
     private void requireAuthenticated(Users currentUser) {

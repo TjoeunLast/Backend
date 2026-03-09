@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.repository.OrderRepository;
 import com.example.project.domain.review.domain.Review;
@@ -27,6 +28,7 @@ public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final UsersRepository userRepository; // 나중에 주석 해제
     private final OrderRepository orderRepository; // 추가 필요
+    private final NotificationService notificationService;
 
     @Transactional
     public void createReview(ReviewRequestDto dto, Users currentUser) {
@@ -52,8 +54,14 @@ public class ReviewService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        reviewRepository.save(review);
+        Review saved = reviewRepository.save(review);
         updateTargetRating(targetId);
+        sendReviewNotificationSafely(
+                target,
+                "새 리뷰 등록",
+                "운송건에 대한 새로운 리뷰가 등록되었습니다.",
+                saved.getReviewId()
+        );
     }
 
     // [U] 리뷰 수정 (별점과 내용 변경 가능)
@@ -154,6 +162,17 @@ public class ReviewService {
         return reviewRepository.findByWriter_UserIdOrderByCreatedAtDesc(currentUser.getUserId()).stream()
                 .map(ReviewResponseDto::new)
                 .collect(Collectors.toList());
+    }
+
+    private void sendReviewNotificationSafely(Users recipient, String title, String body, Long targetId) {
+        if (recipient == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(recipient, "REVIEW", title, body, targetId);
+        } catch (Exception e) {
+            log.warn("리뷰 알림 발송 실패: {}", e.getMessage());
+        }
     }
 
 }
