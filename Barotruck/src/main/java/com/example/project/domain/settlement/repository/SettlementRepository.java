@@ -41,6 +41,15 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
            "WHERE s.feeDate BETWEEN :start AND :end")
     Object[] getSettlementSummary(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    @Query("SELECT COALESCE(SUM(s.totalPrice), 0), " +
+           "COALESCE(SUM(CASE WHEN s.status <> :completedStatus THEN s.totalPrice ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN s.status = :completedStatus THEN s.totalPrice ELSE 0 END), 0), " +
+           "COUNT(s), " +
+           "COALESCE(SUM(CASE WHEN s.status <> :completedStatus THEN 1 ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN s.status = :completedStatus THEN 1 ELSE 0 END), 0) " +
+           "FROM Settlement s")
+    Object[] getSettlementStatusSummary(@Param("completedStatus") SettlementStatus completedStatus);
+
     /**
      * [관리자용] 지역별 매출 및 정산 건수 집계 (Order의 Snapshot 정보 활용)
      */

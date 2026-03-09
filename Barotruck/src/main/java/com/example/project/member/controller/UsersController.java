@@ -92,6 +92,16 @@ public class UsersController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/admin-force-allocate-blocked")
+    public ResponseEntity<Void> updateAdminForceAllocateBlocked(
+            @AuthenticationPrincipal Users userDetails,
+            @RequestBody Map<String, Boolean> body
+    ) {
+        boolean blocked = Boolean.TRUE.equals(body.get("blocked"));
+        service.updateAdminForceAllocateBlocked(userDetails.getUserId(), blocked);
+        return ResponseEntity.ok().build();
+    }
+
     // =========================
     // 6) 유저 정보 조회 (프로필 포함)
     // =========================

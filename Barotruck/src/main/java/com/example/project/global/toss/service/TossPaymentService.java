@@ -77,6 +77,8 @@ public class TossPaymentService {
             throw new IllegalStateException("shipper can prepare only own order");
         }
         validatePaymentStartOrderStatus(snap.status());
+        transportPaymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalStateException("transport payment not initialized. orderId=" + orderId));
         if (snap.driverUserId() == null) {
             throw new IllegalStateException("assigned driver not found");
         }

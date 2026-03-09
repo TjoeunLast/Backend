@@ -32,6 +32,7 @@ import com.example.project.global.neighborhood.dto.NeighborhoodResponse;
 import com.example.project.member.domain.Driver;
 import com.example.project.member.domain.Users;
 import com.example.project.member.repository.DriverRepository;
+import com.example.project.member.repository.UsersRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -106,6 +107,12 @@ public class OrderService {
                         order.getOrderId());
             } else {
                 order.addToDriverList(driverNo);
+                sendOrderNotificationSafely(
+                        order.getUser(),
+                        "배차 지원 도착",
+                        String.format("새로운 기사님이 오더에 지원했습니다. (차량번호: %s)",
+                                driverRepository.findById(driverNo).map(Driver::getCarNum).orElse("정보 없음")),
+                        order.getOrderId());
             }
         } catch (ObjectOptimisticLockingFailureException e) {
             // 🚩 동시성 충돌 발생 시
@@ -187,6 +194,11 @@ public class OrderService {
     public void forceAllocateOrder(Long orderId, Long driverId, String adminEmail, String reason) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
+        Users driver = usersRepository.findByUserId(driverId)
+                .orElseThrow(() -> new RuntimeException("차주를 찾을 수 없습니다."));
+        if (driver.isAdminForceAllocateBlocked()) {
+            throw new IllegalStateException("해당 차주는 관리자 강제배차를 허용하지 않았습니다.");
+        }
 
         // 1. 오더 상태 및 차주 변경
         order.assignDriver(driverId, "ALLOCATED");
@@ -280,6 +292,20 @@ public class OrderService {
 
         order.setCancellationInfo(cancelInfo);
         orderRepository.save(order);
+
+        if ("DRIVER".equals(role)) {
+            sendOrderNotificationSafely(
+                    order.getUser(),
+                    "차주 배차 취소",
+                    "배정된 차주가 주문을 취소했습니다.",
+                    order.getOrderId());
+        } else if ("USER".equals(role) && order.getDriverNo() != null) {
+            sendOrderNotificationSafely(
+                    order.getDriverNo(),
+                    "주문 취소",
+                    "화주가 주문을 취소했습니다.",
+                    order.getOrderId());
+        }
     }
 
     private String determineCancelRole(Order order, Users user) {
@@ -349,6 +375,15 @@ public class OrderService {
         System.out.println("엔티티 상태 변경 후: " + order.getStatus());
 
         Order savedOrder = orderRepository.save(order);
+
+        if ("COMPLETED".equals(normalizedStatus)) {
+            try {
+                transportPaymentService.ensureReadyPaymentRecord(orderId);
+            } catch (Exception e) {
+                System.err.println("결제 READY 레코드 생성 실패: " + e.getMessage());
+            }
+        }
+
         // save 후 즉시 반영을 확인하고 싶다면 아래 주석 해제 (단, 로그 확인용)
         // orderRepository.flush();
 
@@ -496,6 +531,12 @@ public class OrderService {
 
         // 4. 선택되지 않은 나머지 신청자 명단은 비워주기 (선택 사항)
         order.getDriverList().clear();
+
+        sendOrderNotificationSafely(
+                selectedDriverNo,
+                "배차 확정",
+                "화주가 회원님을 최종 기사로 선택했습니다.",
+                order.getOrderId());
     }
 
     /**

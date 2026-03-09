@@ -39,6 +39,10 @@ public class TransportPaymentService {
         return paymentLifecycleService.confirmByDriver(currentUser, orderId);
     }
 
+    public TransportPayment ensureReadyPaymentRecord(Long orderId) {
+        return paymentLifecycleService.ensureReadyPaymentRecord(orderId);
+    }
+
     public PaymentDispute createDispute(
             Users currentUser,
             Long orderId,
