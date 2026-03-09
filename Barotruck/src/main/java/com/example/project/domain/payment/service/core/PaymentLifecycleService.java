@@ -77,14 +77,20 @@ public class PaymentLifecycleService {
                     orderId,
                     snap.shipperUserId(),
                     snap.driverUserId(),
-                    snap.amount(),
+                    fee.chargedAmount(),
                     fee.feeRate(),
                     fee.feeAmount(),
-                    fee.netAmount(),
+                    fee.driverAmount(),
                     effectiveMethod,
                     resolvePaymentTiming(paymentTiming)
             );
         }
+        transportPayment.applyPricingSnapshots(
+                fee.chargedAmount(),
+                fee.feeRate(),
+                fee.feeAmount(),
+                fee.driverAmount()
+        );
 
         if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED
                 || transportPayment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED) {
@@ -147,7 +153,7 @@ public class PaymentLifecycleService {
                         paidOrConfirmedStatuses()
                 ) == 0;
         FeePolicyService.FeeResult fee = feePolicyService.calculate(
-                tx.getAmount(),
+                snap.amount(),
                 userLevel,
                 firstPaymentPromoEligible
         );
@@ -160,12 +166,18 @@ public class PaymentLifecycleService {
                         tx.getAmount(),
                         fee.feeRate(),
                         fee.feeAmount(),
-                        fee.netAmount(),
+                        fee.driverAmount(),
                         tx.getMethod(),
                         resolveGatewayPaymentTiming(tx)
                 ));
 
         payment.applyPaymentTiming(resolveGatewayPaymentTiming(tx));
+        payment.applyPricingSnapshots(
+                tx.getAmount(),
+                fee.feeRate(),
+                fee.feeAmount(),
+                fee.driverAmount()
+        );
 
         if (payment.getStatus() == TransportPaymentStatus.CANCELLED) {
             throw new IllegalStateException("cannot mark paid for cancelled payment");
@@ -178,24 +190,18 @@ public class PaymentLifecycleService {
             return payment;
         }
         if (payment.getStatus() == TransportPaymentStatus.PAID) {
-            payment.confirm(LocalDateTime.now());
-            orderPort.setOrderCompleted(tx.getOrderId());
-
-            TransportPayment saved = transportPaymentRepository.save(payment);
-            upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), tx.getAmount(), fee);
-            completeSettlementOnConfirm(tx.getOrderId());
-            return saved;
+            upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), snap.amount(), fee);
+            orderPort.setOrderPaid(tx.getOrderId());
+            return payment;
         }
 
         String pgReference = firstNonBlank(tx.getTransactionId(), tx.getPaymentKey(), tx.getPgOrderId());
         payment.markPaid(pgReference, LocalDateTime.now());
         payment.setPgTid(pgReference);
-        payment.confirm(LocalDateTime.now());
-        orderPort.setOrderCompleted(tx.getOrderId());
+        orderPort.setOrderPaid(tx.getOrderId());
 
         TransportPayment saved = transportPaymentRepository.save(payment);
-        upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), tx.getAmount(), fee);
-        completeSettlementOnConfirm(tx.getOrderId());
+        upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), snap.amount(), fee);
         return saved;
     }
 

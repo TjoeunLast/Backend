@@ -14,6 +14,7 @@ public interface DriverPayoutItemRepository extends JpaRepository<DriverPayoutIt
 
     List<DriverPayoutItem> findAllByStatusIn(List<PayoutStatus> statuses);
 
+    long countByBatch_BatchId(Long batchId);
     long countByBatch_BatchIdAndStatus(Long batchId, PayoutStatus status);
 }
 

@@ -1,3 +1,17 @@
 /gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+
+# Force UTF-8 working tree for source/config/docs
+*.java text working-tree-encoding=UTF-8
+*.kt text working-tree-encoding=UTF-8
+*.gradle text working-tree-encoding=UTF-8
+*.gradle.kts text working-tree-encoding=UTF-8
+*.properties text working-tree-encoding=UTF-8
+*.yml text working-tree-encoding=UTF-8
+*.yaml text working-tree-encoding=UTF-8
+*.xml text working-tree-encoding=UTF-8
+*.json text working-tree-encoding=UTF-8
+*.sql text working-tree-encoding=UTF-8
+*.txt text working-tree-encoding=UTF-8
+*.md text working-tree-encoding=UTF-8
