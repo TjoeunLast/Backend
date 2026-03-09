@@ -1,9 +1,11 @@
 package com.example.project.domain.review.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.review.domain.Report;
 
 public interface ReportRepository extends JpaRepository<Report, Long> {
@@ -21,4 +23,6 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 
     // 내가 신고한 목록 최신순 조회
     List<Report> findByReporter_UserIdOrderByCreatedAtDesc(Long userId);
+
+	List<Report> findByType(String type);
 }

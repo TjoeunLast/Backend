@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.project.domain.notification.service.NotificationService;
-import com.example.project.member.domain.CustomUserDetails;
+import com.example.project.member.domain.Users;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,7 +25,7 @@ public class NotificationController {
      * 사용자의 전체 알림 목록을 조회합니다.
      */
     @GetMapping
-    public ResponseEntity<?> getMyNotifications(@AuthenticationPrincipal CustomUserDetails userDetails) {
+    public ResponseEntity<?> getMyNotifications(@AuthenticationPrincipal Users userDetails) {
         return ResponseEntity.ok(notificationService.getNotifications(userDetails.getUserId()));
     }
 
