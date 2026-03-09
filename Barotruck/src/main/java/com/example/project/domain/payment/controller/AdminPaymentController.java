@@ -4,6 +4,7 @@ import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisput
 import com.example.project.domain.payment.dto.paymentRequest.UpdateFeePolicyRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdateLevelFeeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdatePaymentDisputeStatusRequest;
+import com.example.project.domain.payment.dto.paymentRequest.UpdateTransportPaymentStatusRequest;
 import com.example.project.domain.payment.dto.paymentResponse.DriverPayoutBatchStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.DriverPayoutItemStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.FeePolicyResponse;
@@ -14,6 +15,7 @@ import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeResp
 import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.PaymentReconciliationStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.PaymentRetryQueueStatusResponse;
+import com.example.project.domain.payment.dto.paymentResponse.TransportPaymentResponse;
 import com.example.project.domain.payment.service.core.DriverPayoutService;
 import com.example.project.domain.payment.service.core.FeeInvoiceBatchService;
 import com.example.project.domain.payment.service.core.FeePolicyService;
@@ -45,6 +47,18 @@ public class AdminPaymentController {
     private final PaymentReconciliationService paymentReconciliationService;
     private final PaymentRetryQueueService paymentRetryQueueService;
     private final AdminPaymentStatusQueryService adminPaymentStatusQueryService;
+
+    // 관리자/배치용 (MVP)
+    @PatchMapping("/orders/{orderId}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<TransportPaymentResponse> updateTransportPaymentStatus(
+            @PathVariable("orderId") Long orderId,
+            @RequestBody UpdateTransportPaymentStatusRequest request,
+            @AuthenticationPrincipal Users currentUser
+    ) {
+        var payment = transportPaymentService.updateAdminStatus(currentUser, orderId, request);
+        return ApiResponse.ok(TransportPaymentResponse.from(payment));
+    }
 
     // 관리자/배치용 (MVP)
     @PostMapping("/orders/{orderId}/disputes")

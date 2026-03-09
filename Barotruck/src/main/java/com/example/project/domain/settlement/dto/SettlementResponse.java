@@ -16,6 +16,17 @@ public record SettlementResponse(
         String accountNum,  // ★ 차주 계좌번호
         String shipperName,   // 화주 회사명 또는 이름
         String bizNumber,      // 사업자 등록번호
+        Long paymentId,
+        String paymentMethod,
+        String paymentTiming,
+        String paymentStatus,
+        Long paymentAmount,
+        Long paymentFeeAmount,
+        Long paymentNetAmount,
+        String pgTid,
+        String proofUrl,
+        LocalDateTime paidAt,
+        LocalDateTime confirmedAt,
         Long levelDiscount,
         Long couponDiscount,
         Long totalPrice,
@@ -43,6 +54,17 @@ public record SettlementResponse(
                 .accountNum(accountNum)
                 .shipperName(shipperName)
                 .bizNumber(bizRegNum)
+                .paymentId(null)
+                .paymentMethod(null)
+                .paymentTiming(null)
+                .paymentStatus(null)
+                .paymentAmount(null)
+                .paymentFeeAmount(null)
+                .paymentNetAmount(null)
+                .pgTid(null)
+                .proofUrl(null)
+                .paidAt(null)
+                .confirmedAt(null)
                 .levelDiscount(settlement.getLevelDiscount())
                 .couponDiscount(settlement.getCouponDiscount())
                 .totalPrice(settlement.getTotalPrice())

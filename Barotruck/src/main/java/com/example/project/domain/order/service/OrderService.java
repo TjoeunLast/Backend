@@ -25,6 +25,7 @@ import com.example.project.domain.order.dto.OrderRequest;
 import com.example.project.domain.order.dto.OrderResponse;
 import com.example.project.domain.order.repository.OrderRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
+import com.example.project.domain.payment.service.core.TransportPaymentService;
 import com.example.project.global.image.ImageUploadResponse;
 import com.example.project.global.image.S3ImageService;
 import com.example.project.global.neighborhood.NeighborhoodService;
@@ -46,7 +47,9 @@ public class OrderService {
     private final NeighborhoodService neighborhoodService;
     private final NotificationService notificationService; // [추가] 알림 서비스 주입
     private final TransportPaymentRepository transportPaymentRepository;
+    private final TransportPaymentService transportPaymentService;
     private final S3ImageService s3ImageService;
+    private final UsersRepository usersRepository;
 
     /**
      * 1. 화주: 오더 생성 (C)
@@ -627,6 +630,28 @@ public class OrderService {
 
             // 프로젝트 구조에 따라 cancelInfoRepository.save(cancelInfo) 호출 필요
             order.setCancellationInfo(cancelInfo);
+        }
+    }
+
+    private void sendOrderNotificationSafely(Users recipient, String title, String body, Long orderId) {
+        if (recipient == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(recipient, "ORDER", title, body, orderId);
+        } catch (Exception e) {
+            System.out.println("오더 알림 발송 중 예외 발생: " + e.getMessage());
+        }
+    }
+
+    private void sendOrderNotificationSafely(Long recipientUserId, String title, String body, Long orderId) {
+        if (recipientUserId == null) {
+            return;
+        }
+        try {
+            notificationService.sendNotification(recipientUserId, "ORDER", title, body, orderId);
+        } catch (Exception e) {
+            System.out.println("오더 알림 발송 중 예외 발생: " + e.getMessage());
         }
     }
 
