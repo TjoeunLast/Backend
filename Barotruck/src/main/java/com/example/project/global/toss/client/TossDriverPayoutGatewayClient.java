@@ -217,6 +217,11 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
         if (isBlank(holderName) || isBlank(email) || isBlank(phone) || isBlank(accountNumber)) {
             throw new IllegalStateException("driver seller registration requires name, email, phone, bank and account");
         }
+        if (isTestPayoutSecretKey()) {
+            throw new IllegalStateException(
+                    "토스 지급 테스트 키에서는 개인(INDIVIDUAL) 셀러 등록을 지원하지 않습니다. 테스트 지급은 사업자/법인 seller 정보 또는 운영 payout 키가 필요합니다."
+            );
+        }
 
         String refSellerId = defaultIfBlank(driver.getTossPayoutSellerRef(), createRefSellerId(driverUser.getUserId()));
         SellerRegisterRequest body = new SellerRegisterRequest(
@@ -437,24 +442,54 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
 
     private String extractFailureReason(Exception exception) {
         String raw = normalize(exception == null ? null : exception.getMessage());
+        String normalizedRawReason = toReadablePayoutFailureReason(raw);
+        if (!isBlank(normalizedRawReason)) {
+            return normalizedRawReason;
+        }
         JsonNode node = TossPayoutCryptoSupport.parseMaybeEncryptedJson(objectMapper, raw, payoutSecurityKey);
         if (node == null) {
             if (looksLikeEncryptedPayload(raw)) {
-                return "failed to decrypt toss payout error response. verify TOSS_PAYOUT_SECURITY_KEY";
+                return "토스 지급 암호화 응답 복호화에 실패했습니다. TOSS_PAYOUT_SECRET_KEY / TOSS_PAYOUT_SECURITY_KEY 조합과 test/live 환경 일치를 확인하세요.";
             }
             return raw;
         }
-        return firstNonBlank(
+        return toReadablePayoutFailureReason(firstNonBlank(
                 readText(node, "message"),
                 readText(node, "reason"),
                 readText(node, "code"),
                 raw
-        );
+        ));
+    }
+
+    private String toReadablePayoutFailureReason(String value) {
+        if (isBlank(value)) {
+            return value;
+        }
+
+        String normalized = value.trim();
+        String upper = normalized.toUpperCase(Locale.ROOT);
+
+        if (upper.contains("GZIP")) {
+            return "토스 지급 암호화 응답을 해석하지 못했습니다. TOSS_PAYOUT_SECRET_KEY / TOSS_PAYOUT_SECURITY_KEY가 같은 환경(test/live)의 지급용 키인지 확인하세요.";
+        }
+        if (upper.contains("FAILED TO DECRYPT TOSS PAYOUT")
+                || upper.contains("INVALID_ENCRYPTION")
+                || upper.contains("PAYMENT.TOSS.PAYOUT.SECURITY-KEY")) {
+            return "토스 지급 응답 복호화에 실패했습니다. TOSS_PAYOUT_SECURITY_KEY와 지급용 secret/security key 조합을 확인하세요.";
+        }
+        if (upper.contains("PAYMENT.TOSS.PAYOUT.SECRET-KEY IS REQUIRED")) {
+            return "토스 지급용 secret key가 없습니다. TOSS_PAYOUT_SECRET_KEY를 설정하세요.";
+        }
+        return normalized;
     }
 
     private String encodeBasicAuth(String secretKey) {
         return Base64.getEncoder()
                 .encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
+    }
+
+    private boolean isTestPayoutSecretKey() {
+        return !isBlank(payoutSecretKey) && payoutSecretKey.trim().startsWith("test_sk_");
     }
 
     private boolean looksLikeEncryptedPayload(String value) {
