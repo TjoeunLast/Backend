@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -144,5 +145,30 @@ public class UsersController {
     public ResponseEntity<String> deleteProfileImage(@AuthenticationPrincipal Users user) {
     	service.deleteProfileImage(user.getUserId());
         return ResponseEntity.ok("프로필 이미지가 삭제되었습니다.");
+    }
+    
+    /**
+     * 유저 정보 수정
+     * PATCH /api/user/me
+     */
+    @PatchMapping("/me")
+    public ResponseEntity<String> updateMyInfo(
+            @AuthenticationPrincipal Users user,
+            @RequestBody UserResponseDto updateDto) {
+        
+        service.updateMyInfo(user.getUserId(), updateDto);
+        return ResponseEntity.ok("정보가 성공적으로 수정되었습니다.");
+    }
+
+    /**
+     * 회원 탈퇴
+     * DELETE /api/user/me
+     */
+    @DeleteMapping("/me")
+    public ResponseEntity<String> withdraw(
+            @AuthenticationPrincipal Users user) {
+        
+    	String result = service.deleteUser(user.getUserId());
+        return ResponseEntity.ok(result);
     }
 }

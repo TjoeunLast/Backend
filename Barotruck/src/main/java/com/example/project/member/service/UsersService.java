@@ -166,4 +166,39 @@ public class UsersService {
         return UserResponseDto.from(user);
     }
 
+    
+    /**
+     * 유저 정보 수정
+     */
+    @Transactional
+    public void updateMyInfo(Long userId, UserResponseDto updateDto) {
+        Users user = repository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+        
+        // 엔티티의 업데이트 메서드 호출
+        user.updateUserInfo(
+            updateDto.getNickname(),
+            updateDto.getPhone(),
+            updateDto.getGender(),
+            updateDto.getAge()
+        );
+    }
+
+    @Transactional
+    public String deleteUser(Long userId) {
+        Users user = repository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+        
+        // 실제 삭제 대신 플래그만 변경
+        user.markAsDeleted();
+        
+	    // 만약 탈퇴 시 S3 이미지도 지우고 싶다면 아래 주석 해제
+	    // if (user.getProfileImage() != null) {
+	    //     s3ImageService.delete(user.getProfileImage().getS3Key());
+	    //     user.clearProfileImage();
+	    // }
+        
+        return "회원 탈퇴 처리가 완료되었습니다.";
+    }
+    
 }

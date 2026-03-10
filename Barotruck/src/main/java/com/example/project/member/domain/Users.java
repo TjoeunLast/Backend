@@ -193,4 +193,22 @@ public class Users implements UserDetails {
     public boolean isEnabled() {
         return "N".equals(delflag);
     }
+    
+ // 유저 정보 업데이트를 위한 메서드 추가
+    public void updateUserInfo(String nickname, String phone, String gender, Integer age) {
+        if (nickname != null) this.nickname = nickname;
+        if (phone != null) this.phone = phone;
+        if (gender != null) this.gender = gender;
+        if (age != null) this.age = age;
+    }
+    
+ // 삭제 메서드 (Soft Delete)
+    public void markAsDeleted() {
+        this.delflag = "Y";
+    }
+
+    // 복구 메서드
+    public void restore() {
+        this.delflag = "N";
+    }
 }
