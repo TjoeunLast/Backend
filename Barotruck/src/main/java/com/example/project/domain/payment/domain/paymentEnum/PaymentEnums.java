@@ -25,6 +25,22 @@ public final class PaymentEnums {
         CANCELED
     }
 
+    public enum BillingAgreementStatus {
+        // 사용 가능
+        ACTIVE,
+        // 해지/비활성
+        INACTIVE,
+        // 외부 삭제/만료
+        DELETED
+    }
+
+    public enum FeeAutoChargeStatus {
+        // 자동청구 성공
+        SUCCEEDED,
+        // 자동청구 실패
+        FAILED
+    }
+
     public enum PayChannel {
         // 일반 카드 결제
         CARD,

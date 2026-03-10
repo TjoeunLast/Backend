@@ -17,12 +17,14 @@ import com.example.project.domain.payment.repository.PaymentGatewayTransactionRe
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.payment.service.core.FeePolicyService;
 import com.example.project.domain.payment.service.core.PaymentLifecycleService;
+import com.example.project.domain.payment.service.core.TossPayoutWebhookService;
 import com.example.project.global.toss.client.TossPaymentClient;
 import com.example.project.member.domain.Users;
 import com.example.project.security.user.Role;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -47,6 +49,7 @@ public class TossPaymentService {
     private final TransportPaymentRepository transportPaymentRepository;
     private final UserPort userPort;
     private final OrderPort orderPort;
+    private final TossPayoutWebhookService tossPayoutWebhookService;
     private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
 
@@ -76,6 +79,7 @@ public class TossPaymentService {
         if (snap.shipperUserId() == null || !snap.shipperUserId().equals(currentUser.getUserId())) {
             throw new IllegalStateException("shipper can prepare only own order");
         }
+        validateTossCheckoutConfiguration();
         validatePaymentStartOrderStatus(snap.status());
         paymentLifecycleService.requireInitializedPayment(orderId);
         if (snap.driverUserId() == null) {
@@ -256,7 +260,15 @@ public class TossPaymentService {
                 .payload(safePayload)
                 .receivedAt(LocalDateTime.now())
                 .build();
-        entityManager.persist(webhookEvent);
+        try {
+            entityManager.persist(webhookEvent);
+            entityManager.flush();
+        } catch (PersistenceException e) {
+            if (findWebhookEvent(externalEventId) != null) {
+                return;
+            }
+            throw e;
+        }
 
         try {
             JsonNode node = objectMapper.readTree(safePayload);
@@ -267,6 +279,14 @@ public class TossPaymentService {
                     readText(node, "merchantOrderId")
             );
             String status = firstNonBlank(readText(node, "status"), webhookEvent.getEventType()).toUpperCase(Locale.ROOT);
+            String eventTypeUpper = webhookEvent.getEventType() == null
+                    ? ""
+                    : webhookEvent.getEventType().toUpperCase(Locale.ROOT);
+
+            if (eventTypeUpper.contains("PAYOUT") || eventTypeUpper.contains("SELLER")) {
+                webhookEvent.markProcessed(tossPayoutWebhookService.handle(webhookEvent.getEventType(), node));
+                return;
+            }
 
             PaymentGatewayTransaction tx = findTransactionFromWebhook(paymentKey, pgOrderId);
             if (tx == null) {
@@ -275,8 +295,15 @@ public class TossPaymentService {
             }
 
             if (isCanceledStatus(status)) {
-                tx.markCanceled(safePayload);
+                tx.markCanceled(
+                        safePayload,
+                        extractCancelReason(node),
+                        extractCancelAmount(node),
+                        extractCanceledAt(node),
+                        extractCancelTransactionId(node)
+                );
                 paymentGatewayTransactionRepository.save(tx);
+                paymentLifecycleService.applyCanceledFromGatewayTx(tx);
                 webhookEvent.markProcessed("CANCELED");
             } else if (isFailedStatus(status)) {
                 tx.markFailed(
@@ -306,6 +333,7 @@ public class TossPaymentService {
                     );
                     tx.applyMethodAndChannel(confirmedMethod, confirmedChannel);
                     tx.markConfirmed(resolvedPaymentKey, resolvedTxId, safePayload);
+                    tx.applyGatewayStatus(status);
                     paymentGatewayTransactionRepository.save(tx);
                 }
                 paymentLifecycleService.applyPaidFromGatewayTx(tx);
@@ -426,6 +454,50 @@ public class TossPaymentService {
         return "TOSS-" + orderId + "-" + System.currentTimeMillis();
     }
 
+    private String extractCancelReason(JsonNode node) {
+        JsonNode latestCancel = getLatestCancelNode(node);
+        return firstNonBlank(
+                readText(latestCancel, "cancelReason"),
+                readText(latestCancel, "reason"),
+                readText(node, "cancelReason")
+        );
+    }
+
+    private BigDecimal extractCancelAmount(JsonNode node) {
+        JsonNode latestCancel = getLatestCancelNode(node);
+        BigDecimal amount = readDecimal(latestCancel, "cancelAmount");
+        if (amount != null) {
+            return amount;
+        }
+        return readDecimal(node, "canceledAmount");
+    }
+
+    private LocalDateTime extractCanceledAt(JsonNode node) {
+        JsonNode latestCancel = getLatestCancelNode(node);
+        return parseDateTime(firstNonBlank(
+                readText(latestCancel, "canceledAt"),
+                readText(latestCancel, "approvedAt"),
+                readText(node, "canceledAt")
+        ));
+    }
+
+    private String extractCancelTransactionId(JsonNode node) {
+        JsonNode latestCancel = getLatestCancelNode(node);
+        return firstNonBlank(
+                readText(latestCancel, "transactionKey"),
+                readText(latestCancel, "cancelTransactionKey"),
+                readText(node, "lastTransactionKey")
+        );
+    }
+
+    private JsonNode getLatestCancelNode(JsonNode node) {
+        JsonNode cancelsNode = node == null ? null : node.get("cancels");
+        if (cancelsNode == null || !cancelsNode.isArray() || cancelsNode.isEmpty()) {
+            return null;
+        }
+        return cancelsNode.get(cancelsNode.size() - 1);
+    }
+
     private boolean isConfirmedStatus(String status) {
         String upper = status.toUpperCase(Locale.ROOT);
         return upper.contains("DONE") || upper.contains("CONFIRMED") || upper.contains("PAID") || upper.contains("SUCCESS");
@@ -456,6 +528,12 @@ public class TossPaymentService {
         return true;
     }
 
+    private void validateTossCheckoutConfiguration() {
+        if (isBlank(tossClientKey)) {
+            throw new IllegalStateException("payment.toss.client-key is required for real toss checkout");
+        }
+    }
+
     private void verifyWebhookSecret(String payload, String webhookSecretHeader) {
         String expected = normalize(tossWebhookSecret);
         if (isBlank(expected)) {
@@ -480,12 +558,30 @@ public class TossPaymentService {
     }
 
     private String readText(JsonNode node, String fieldName) {
+        if (node == null || fieldName == null) {
+            return null;
+        }
         JsonNode value = node.get(fieldName);
         if (value == null || value.isNull()) {
             return null;
         }
         String text = value.asText();
         return text == null ? null : text.trim();
+    }
+
+    private BigDecimal readDecimal(JsonNode node, String fieldName) {
+        if (node == null || fieldName == null) {
+            return null;
+        }
+        String text = readText(node, fieldName);
+        if (isBlank(text)) {
+            return null;
+        }
+        try {
+            return new BigDecimal(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private String defaultIfBlank(String value, String defaultValue) {
@@ -524,6 +620,21 @@ public class TossPaymentService {
             return null;
         }
         return value.trim();
+    }
+
+    private LocalDateTime parseDateTime(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+        try {
+            return java.time.OffsetDateTime.parse(value).toLocalDateTime();
+        } catch (Exception ignored) {
+        }
+        try {
+            return LocalDateTime.parse(value);
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     private String resolveRedirectUrl(String configuredUrl, Long orderId) {

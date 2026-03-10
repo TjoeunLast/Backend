@@ -147,6 +147,13 @@ public class ReportService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public ReportResponseDto getReportDetail(Long reportId) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new IllegalArgumentException("신고 내역이 없습니다."));
+        return new ReportResponseDto(report);
+    }
+
     private void sendReportNotificationSafely(Users recipient, String title, String body, Long targetId) {
         if (recipient == null) {
             return;

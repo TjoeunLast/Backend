@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Component
-@ConditionalOnProperty(name = "payment.payout.mock-enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "payment.payout.mock-enabled", havingValue = "true", matchIfMissing = false)
 public class DummyDriverPayoutGatewayClient implements DriverPayoutGatewayClient {
 
     @Override
