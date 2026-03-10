@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Optional;
 
 import com.example.project.domain.order.domain.FarePolicy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -36,6 +38,10 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
 
        // 특정 상태 리스트에 포함된 오더 조회 (예: 모든 취소 상태)
        List<Order> findByStatusInOrderByCreatedAtDesc(List<String> statuses);
+
+       Page<Order> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+       Page<Order> findByStatusIn(List<String> statuses, Pageable pageable);
 
        // 특정 차주의 특정 상태(완료)인 운행 건수를 카운트
        Long countByDriverNoAndStatus(Long driverNo, String status);
