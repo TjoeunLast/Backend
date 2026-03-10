@@ -52,6 +52,15 @@ public class Driver {
     @Column(name = "ACCOUNT_NUM", length = 50)
     private String accountNum; // 은행번호
 
+    @Column(name = "TOSS_PAYOUT_SELLER_ID", length = 100)
+    private String tossPayoutSellerId;
+
+    @Column(name = "TOSS_PAYOUT_SELLER_REF", length = 40)
+    private String tossPayoutSellerRef;
+
+    @Column(name = "TOSS_PAYOUT_SELLER_STATUS", length = 40)
+    private String tossPayoutSellerStatus;
+
     @Column(name = "IS_SUSPENDED", length = 1)
     private String isSuspended; // 정지 여부 (Y/N)
 

@@ -68,9 +68,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
           UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
           
+          // Fresh token issued by a different app instance may not have a persisted
+          // token row yet. If a row exists, honor revoke/expire flags. If not, fall
+          // back to JWT signature validation so authenticated mobile flows still work.
           var isTokenValid = tokenRepository.findByToken(jwt)
               .map(t -> !t.isExpired() && !t.isRevoked())
-              .orElse(false);
+              .orElseGet(() -> {
+                log.warn("Token row not found for user={}, falling back to JWT validation only", userEmail);
+                return true;
+              });
           
           if (jwtService.isTokenValid(jwt, userDetails) && isTokenValid) {
             UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(

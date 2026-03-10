@@ -88,6 +88,9 @@ public class SecurityConfiguration {
                                 .requestMatchers("/api/ocr/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/notices/**").permitAll() // 공지는 누구나 조회 가능
                                 .requestMatchers("/api/admin/**").hasRole("ADMIN") // 관리자 전용 API
+                                .requestMatchers("/api/v1/orders/my-shipper").authenticated()
+                                .requestMatchers("/api/v1/orders/my-driving").authenticated()
+                                .requestMatchers("/api/v1/settlements/**").authenticated()
                                 
                                 // ★ 중요: 채팅과 공구 관련 API는 반드시 인증(Token) 필요
                                 // 이렇게 설정해야 @AuthenticationPrincipal에 데이터가 정상적으로 들어옵니다.

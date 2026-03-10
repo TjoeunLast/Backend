@@ -95,7 +95,10 @@ public class AuthenticationService {
 			Driver driver = Driver.builder()
 					.carNum(dDto.getCarNum())
 					.carType(dDto.getCarType())
+					.bankName(dDto.getBankName())
+					.accountNum(dDto.getAccountNum())
 					.nbhId(nbhId)
+					.address(dDto.getAddress())
 					.user(user)
 					.build();
 			user.setDriver(driver);

@@ -2,8 +2,11 @@ package com.example.project.domain.review.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.project.domain.review.dto.ReportRequestDto;
 import com.example.project.domain.review.dto.ReportResponseDto;
 import com.example.project.domain.review.service.ReportService;
+import com.example.project.global.api.PaginationUtils;
 import com.example.project.member.domain.Users;
 import com.example.project.security.user.Role;
 
@@ -47,12 +51,18 @@ public class ReportController {
 
     // 전체 신고 목록 조회 (관리자용, 최신순)
     @GetMapping("/admin/all")
-    public ResponseEntity<List<ReportResponseDto>> getAllReports(
-            @AuthenticationPrincipal Users currentUser) {
+    public ResponseEntity<?> getAllReports(
+            @AuthenticationPrincipal Users currentUser,
+            @PageableDefault(size = 20) Pageable pageable,
+            NativeWebRequest webRequest) {
         if (currentUser.getRole() != Role.ADMIN) {
             throw new IllegalStateException("관리자 권한이 필요합니다.");
         }
-        return ResponseEntity.ok(reportService.getAllReports());
+        List<ReportResponseDto> reports = reportService.getAllReports();
+        if (!PaginationUtils.isPagedRequest(webRequest)) {
+            return ResponseEntity.ok(reports);
+        }
+        return ResponseEntity.ok(PaginationUtils.paginate(reports, pageable));
     }
 
     // 내가 신고한 목록 조회 (최신순)

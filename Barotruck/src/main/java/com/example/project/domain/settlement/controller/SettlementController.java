@@ -42,6 +42,15 @@ public class SettlementController {
         return ApiResponse.ok(settlementService.getMySettlements(currentUser, status));
     }
 
+    @GetMapping("/admin/list")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<List<SettlementResponse>> getAdminSettlements(
+            @RequestParam(value = "status", required = false) String status,
+            @AuthenticationPrincipal Users currentUser
+    ) {
+        return ApiResponse.ok(settlementService.getAdminSettlements(currentUser, status));
+    }
+
     @PatchMapping("/orders/{orderId}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<SettlementResponse> updateStatus(
