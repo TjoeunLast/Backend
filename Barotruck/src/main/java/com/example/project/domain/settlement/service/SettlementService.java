@@ -72,27 +72,24 @@ public class SettlementService {
         requireAuthenticated(currentUser);
 
         List<Settlement> base;
-        if (currentUser.getRole() == Role.ADMIN) {
-            base = settlementRepository.findAll();
-        } else if (currentUser.getRole() == Role.SHIPPER) {
+        if (currentUser.getRole() == Role.SHIPPER) {
             base = settlementRepository.findByUser_UserIdOrderByFeeDateDesc(currentUser.getUserId());
         } else if (currentUser.getRole() == Role.DRIVER) {
             base = settlementRepository.findByDriverUserIdOrderByFeeDateDesc(currentUser.getUserId());
+        } else if (currentUser.getRole() == Role.ADMIN) {
+            throw new IllegalStateException("admin must use admin settlement list api");
         } else {
             throw new IllegalStateException("unsupported role for settlement view");
         }
 
-        if (status == null || status.isBlank()) {
-            return base.stream()
-                    .map(this::toResponse)
-                    .collect(Collectors.toList());
-        }
+        return filterAndMapSettlements(base, status);
+    }
 
-        SettlementStatus normalizedStatus = parseSettlementStatus(status);
-        return base.stream()
-                .filter(s -> s.getStatus() == normalizedStatus)
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    @Transactional(readOnly = true)
+    public List<SettlementResponse> getAdminSettlements(Users currentUser, String status) {
+        requireAuthenticated(currentUser);
+        requireAdmin(currentUser);
+        return filterAndMapSettlements(settlementRepository.findAll(), status);
     }
 
     @Transactional(readOnly = true)
@@ -322,7 +319,7 @@ public class SettlementService {
 
     private void requireAdmin(Users user) {
         if (user.getRole() != Role.ADMIN) {
-            throw new IllegalStateException("only admin can update settlement status");
+            throw new IllegalStateException("only admin can access settlement admin api");
         }
     }
 
@@ -357,6 +354,20 @@ public class SettlementService {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("invalid settlement status: " + status);
         }
+    }
+
+    private List<SettlementResponse> filterAndMapSettlements(List<Settlement> base, String status) {
+        if (status == null || status.isBlank()) {
+            return base.stream()
+                    .map(this::toResponse)
+                    .collect(Collectors.toList());
+        }
+
+        SettlementStatus normalizedStatus = parseSettlementStatus(status);
+        return base.stream()
+                .filter(settlement -> settlement.getStatus() == normalizedStatus)
+                .map(this::toResponse)
+                .collect(Collectors.toList());
     }
 
     private SettlementResponse toResponse(Settlement settlement) {

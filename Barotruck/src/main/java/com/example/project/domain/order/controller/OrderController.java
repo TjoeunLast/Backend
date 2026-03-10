@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -107,6 +108,7 @@ public class OrderController {
      * 대상 상태: ACCEPTED, LOADING, IN_TRANSIT, UNLOADING
      */
     @GetMapping("/my-driving")
+    @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<List<OrderResponse>> getMyDrivingOrders(@AuthenticationPrincipal Users user) {
         // 현재 로그인한 사용자의 ID와 특정 상태값들을 서비스로 전달
         List<OrderResponse> orders = orderService.findMyDrivingOrders(user.getUserId());
@@ -167,12 +169,8 @@ public class OrderController {
      * (최신 등록순)
      */
     @GetMapping("/my-shipper")
+    @PreAuthorize("hasRole('SHIPPER')")
     public ResponseEntity<List<OrderResponse>> getMyShipperOrders(@AuthenticationPrincipal Users user) {
-        // 화주 권한 체크 (선택 사항이나 권장)
-        if (!user.getRole().name().equals("SHIPPER")) {
-            throw new IllegalStateException("화주 권한이 필요한 서비스입니다.");
-        }
-
         List<OrderResponse> orders = orderService.findMyShipperOrders(user.getUserId());
         return ResponseEntity.ok(orders);
     }
