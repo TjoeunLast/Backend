@@ -25,16 +25,11 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
        // 화주: 자신이 올린 요청 목록 조회
        List<Order> findByUserOrderByCreatedAtDesc(Users user);
 
-       // 차주: 현재 매칭 대기 중인(REQUESTED) 전체 오더 조회
-       @Query(value = "SELECT * FROM orders " +
-               "WHERE status = :status " +
-               "  AND ( " +
-               "    TO_DATE(start_schedule, 'YYYY-MM-DD HH24:MI') > TO_DATE(:now, 'YYYY-MM-DD HH24:MI') " +
-               "    OR start_schedule IS NULL " +
-               "  ) " +
-               "ORDER BY created_at DESC", 
-       nativeQuery = true)
-       List<Order> findAvailableOrders(@Param("status") String status, @Param("now") String now);
+       // 차주: 현재 매칭 대기 중인(REQUESTED) 전체 오더 조회 후보
+       @Query("SELECT o FROM Order o " +
+                     "WHERE o.status = :status " +
+                     "ORDER BY o.createdAt DESC")
+       List<Order> findAvailableOrderCandidates(@Param("status") String status);
 
        // 특정 상태 리스트에 포함된 오더 조회 (예: 모든 취소 상태)
        List<Order> findByStatusInOrderByCreatedAtDesc(List<String> statuses);
@@ -131,17 +126,10 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
                      "ORDER BY COUNT(o) DESC")
        List<Object[]> countDropoffStatsByPeriod(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-       // OrderRepository.java
        @Query("SELECT o FROM Order o JOIN o.snapshot s " +
                      "WHERE o.status = 'REQUESTED' " +
-                     "AND (s.reqCarType = :carType OR s.reqCarType IS NULL) " +
-                     "AND s.tonnage <= :driverTonnage " +
-                     "AND (s.startSchedule > :now OR s.startSchedule IS NULL) " +
                      "ORDER BY o.createdAt DESC")
-       List<Order> findCustomOrders(
-                     @Param("carType") String carType,
-                     @Param("driverTonnage") BigDecimal driverTonnage,
-                     @Param("now") String now);
+       List<Order> findRecommendationCandidates();
 
        // status가 String인 경우에도 In 키워드로 목록 조회가 가능합니다. 배차 현황중인 오더목록 볼수있는 (차주입장에서)
        List<Order> findByDriverNoAndStatusIn(Long driverNo, List<String> statuses);

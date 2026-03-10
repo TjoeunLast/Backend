@@ -3,6 +3,7 @@ package com.example.project.domain.order.service;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,9 +42,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional
 public class OrderService {
-
     private final OrderRepository orderRepository;
     private final DriverRepository driverRepository; // 드라이버 정보 조회를 위한 레포지토리
+    private final DriverOrderRecommendationService driverOrderRecommendationService;
     private final NeighborhoodService neighborhoodService;
     private final NotificationService notificationService; // [추가] 알림 서비스 주입
     private final TransportPaymentRepository transportPaymentRepository;
@@ -186,14 +187,10 @@ public class OrderService {
      */
     @Transactional(readOnly = true)
     public List<OrderResponse> getAvailableOrders(Long userId) {
-        String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-        List<Order> orders = orderRepository.findAvailableOrders("REQUESTED", now);
-
-        System.out.println(orders);
-
-        for (int i = 0; i < orders.size(); i++) {
-            System.out.println(orders.indexOf(i));
-        }
+        List<Order> orders = orderRepository.findAvailableOrderCandidates("REQUESTED")
+                .stream()
+                .filter(this::isAvailableOrderBySchedule)
+                .collect(Collectors.toList());
 
         return orders.stream()
                 .map(order -> convertToResponse(order, userId))
@@ -460,6 +457,24 @@ public class OrderService {
         }
     }
 
+    private boolean isAvailableOrderBySchedule(Order order) {
+        if (order == null || order.getSnapshot() == null) {
+            return false;
+        }
+
+        String startSchedule = order.getSnapshot().getStartSchedule();
+        if (startSchedule == null || startSchedule.isBlank()) {
+            return true;
+        }
+
+        try {
+            LocalDateTime parsed = LocalDateTime.parse(startSchedule.trim(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            return parsed.isAfter(LocalDateTime.now());
+        } catch (DateTimeParseException ignored) {
+            return true;
+        }
+    }
+
     public List<OrderResponse> findMyDrivingOrders(Long driverId) {
         // 운행 중으로 간주되는 상태 리스트 정의
         List<String> drivingStatuses = List.of(
@@ -483,24 +498,10 @@ public class OrderService {
      * 드라이버 맞춤형 추천 오더 목록 조회
      */
     public List<OrderResponse> getRecommendedOrders(Long userId) {
-        // 1. 드라이버 프로필 조회
         Driver driver = driverRepository.findByUser_UserId(userId)
                 .orElseThrow(() -> new RuntimeException("드라이버 프로필을 찾을 수 없습니다."));
 
-        // 차주의 선호 지역 코드 사용 (없으면 null -> 전체 지역 조회)
-        Long nbhId = driver.getNbhId();
-
-        String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-
-        // 2. 맞춤형 오더 조회
-        // 주의: driver.getTonnage() 필드가 BigDecimal 타입인지 확인하세요.
-        List<Order> recommendedOrders = orderRepository.findCustomOrders(
-                driver.getCarType(),
-                driver.getTonnage(),
-                now);
-
-        // 3. 응답 변환
-        return recommendedOrders.stream()
+        return driverOrderRecommendationService.getRecommendedOrders(driver, userId).stream()
                 .map(order -> convertToResponse(order, userId))
                 .collect(Collectors.toList());
     }
@@ -529,9 +530,7 @@ public class OrderService {
             }
         }
 
-        String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-        // 기존의 맞춤형 오더 조회 쿼리 재사용 (차종/톤수 필터 + 지역 필터)
-        return orderRepository.findCustomOrders(driver.getCarType(), driver.getTonnage(), now)
+        return driverOrderRecommendationService.searchOrders(driver, user.getUserId(), targetNbhId, address)
                 .stream()
                 .map(order -> convertToResponse(order, user.getUserId()))
                 .collect(Collectors.toList());
