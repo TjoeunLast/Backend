@@ -158,3 +158,4 @@
 - 상세 로직: `docs/payment-logic.md`
 - 구현 스냅샷: `docs/toss-payment-implementation-handoff.md`
 - 정합성 리뷰: `docs/toss-payment-gap-review.md`
+- 테스트 앱 계획: `docs/toss-payment-test-app-plan.md`

@@ -229,6 +229,23 @@ public class OrderController {
         return ResponseEntity.ok(imageUrl);
     }
 
+    @PostMapping(value = "/{orderId}/arrival-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<String> uploadArrivalPhoto(
+            @PathVariable("orderId") Long orderId,
+            @RequestParam("image") MultipartFile file,
+            @AuthenticationPrincipal Users user
+    ) {
+        String imageUrl = orderService.uploadArrivalPhoto(orderId, user.getUserId(), file);
+        return ResponseEntity.ok(imageUrl);
+    }
+
+    @GetMapping("/{orderId}/arrival-photo")
+    public ResponseEntity<String> getArrivalPhoto(@PathVariable("orderId") Long orderId) {
+        String imageUrl = orderService.getArrivalPhotoUrl(orderId);
+        return ResponseEntity.ok(imageUrl);
+    }
+
     /**
      * 오더 이미지 조회
      * GET /api/v1/orders/{orderId}/image
