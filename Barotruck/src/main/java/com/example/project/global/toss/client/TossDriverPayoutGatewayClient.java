@@ -70,6 +70,12 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
     @Value("${payment.toss.payout.scheduled-minute:00}")
     private int payoutScheduledMinute;
 
+    @Value("${payment.toss.payout.test-corporate.company-name:}")
+    private String testCorporateCompanyName;
+
+    @Value("${payment.toss.payout.test-corporate.business-registration-number:}")
+    private String testCorporateBusinessRegistrationNumber;
+
     @Override
     public PayoutResult payout(Long orderId, Long driverUserId, BigDecimal netAmount, Long batchId, Long itemId) {
         if (orderId == null || driverUserId == null || itemId == null) {
@@ -93,6 +99,16 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
         Users driverUser = driver.getUser();
         if (driverUser == null) {
             return new PayoutResult(false, false, null, null, "driver user not found");
+        }
+        if (shouldBypassTestPayout()) {
+            ensureTestSellerSnapshot(driver, driverUser);
+            return new PayoutResult(
+                    true,
+                    true,
+                    createTestPayoutRef(orderId, itemId),
+                    "COMPLETED",
+                    null
+            );
         }
 
         BigDecimal payoutAmount = normalizePayoutAmount(netAmount);
@@ -119,9 +135,10 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
         PayoutRequest body = new PayoutRequest(
                 refPayoutId,
                 sellerInfo.sellerId(),
-                new PayoutAmount(payoutAmount, "KRW"),
                 schedule.scheduleType(),
-                schedule.scheduledAt()
+                schedule.scheduledAt(),
+                new PayoutAmount(payoutAmount, "KRW"),
+                createTransactionDescription(orderId)
         );
 
         try {
@@ -163,6 +180,9 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
     public PayoutStatusResult getPayoutStatus(String payoutRef) {
         if (isBlank(payoutRef)) {
             return new PayoutStatusResult(false, false, false, null, "missing payoutRef");
+        }
+        if (shouldBypassTestPayout()) {
+            return new PayoutStatusResult(true, true, false, "COMPLETED", null);
         }
         if (isBlank(payoutSecretKey)) {
             return new PayoutStatusResult(false, false, false, null, "payment.toss.payout.secret-key is required");
@@ -217,19 +237,32 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
         if (isBlank(holderName) || isBlank(email) || isBlank(phone) || isBlank(accountNumber)) {
             throw new IllegalStateException("driver seller registration requires name, email, phone, bank and account");
         }
+        String refSellerId = defaultIfBlank(driver.getTossPayoutSellerRef(), createRefSellerId(driverUser.getUserId()));
+        SellerRegisterRequest body;
         if (isTestPayoutSecretKey()) {
-            throw new IllegalStateException(
-                    "토스 지급 테스트 키에서는 개인(INDIVIDUAL) 셀러 등록을 지원하지 않습니다. 테스트 지급은 사업자/법인 seller 정보 또는 운영 payout 키가 필요합니다."
+            String companyName = normalize(testCorporateCompanyName);
+            String businessRegistrationNumber = digitsOnly(testCorporateBusinessRegistrationNumber);
+            if (isBlank(companyName) || isBlank(businessRegistrationNumber) || businessRegistrationNumber.length() != 10) {
+                throw new IllegalStateException(
+                        "테스트 지급용 CORPORATE seller 정보가 없습니다. TOSS_PAYOUT_TEST_COMPANY_NAME, TOSS_PAYOUT_TEST_BUSINESS_REGISTRATION_NUMBER(10자리)를 설정하세요."
+                );
+            }
+            body = new SellerRegisterRequest(
+                    refSellerId,
+                    "CORPORATE",
+                    new SellerCompany(companyName, holderName, businessRegistrationNumber, email, phone),
+                    null,
+                    new SellerAccount(bankCode, accountNumber, holderName)
+            );
+        } else {
+            body = new SellerRegisterRequest(
+                    refSellerId,
+                    "INDIVIDUAL",
+                    null,
+                    new SellerIndividual(holderName, email, phone),
+                    new SellerAccount(bankCode, accountNumber, holderName)
             );
         }
-
-        String refSellerId = defaultIfBlank(driver.getTossPayoutSellerRef(), createRefSellerId(driverUser.getUserId()));
-        SellerRegisterRequest body = new SellerRegisterRequest(
-                refSellerId,
-                "INDIVIDUAL",
-                new SellerCustomer(holderName, email, phone),
-                new SellerAccount(bankCode, accountNumber, holderName)
-        );
 
         JsonNode node = encryptedPostJson(sellerPath, body, refSellerId);
         if (node == null) {
@@ -258,6 +291,22 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
         driver.setTossPayoutSellerId(sellerInfo.sellerId());
         driver.setTossPayoutSellerRef(defaultIfBlank(sellerInfo.refSellerId(), driver.getTossPayoutSellerRef()));
         driver.setTossPayoutSellerStatus(sellerInfo.status());
+        driverRepository.save(driver);
+    }
+
+    private void ensureTestSellerSnapshot(Driver driver, Users driverUser) {
+        if (driver == null || driverUser == null) {
+            return;
+        }
+        if (isBlank(driver.getTossPayoutSellerId())) {
+            driver.setTossPayoutSellerId("TEST-SELLER-" + driverUser.getUserId());
+        }
+        if (isBlank(driver.getTossPayoutSellerRef())) {
+            driver.setTossPayoutSellerRef(createRefSellerId(driverUser.getUserId()));
+        }
+        if (isBlank(driver.getTossPayoutSellerStatus())) {
+            driver.setTossPayoutSellerStatus("APPROVED");
+        }
         driverRepository.save(driver);
     }
 
@@ -356,7 +405,7 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
             return new ResolvedSchedule("EXPRESS", null);
         }
         if ("SCHEDULED".equals(configured)) {
-            return new ResolvedSchedule("SCHEDULED", nextBusinessScheduledAt(now));
+            return new ResolvedSchedule("SCHEDULED", nextBusinessScheduledDate(now));
         }
 
         LocalTime currentTime = now.toLocalTime();
@@ -366,22 +415,15 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
         if (businessDay && withinExpressWindow) {
             return new ResolvedSchedule("EXPRESS", null);
         }
-        return new ResolvedSchedule("SCHEDULED", nextBusinessScheduledAt(now));
+        return new ResolvedSchedule("SCHEDULED", nextBusinessScheduledDate(now));
     }
 
-    private String nextBusinessScheduledAt(LocalDateTime now) {
-        ZoneId zoneId = resolveZoneId();
+    private String nextBusinessScheduledDate(LocalDateTime now) {
         LocalDate date = now.toLocalDate();
         do {
             date = date.plusDays(1);
         } while (!isBusinessDay(date));
-        return date.atTime(
-                        clampScheduleHour(payoutScheduledHour),
-                        clampScheduleMinute(payoutScheduledMinute)
-                )
-                .atZone(zoneId)
-                .toOffsetDateTime()
-                .toString();
+        return date.toString();
     }
 
     private boolean isBusinessDay(LocalDate date) {
@@ -492,6 +534,21 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
         return !isBlank(payoutSecretKey) && payoutSecretKey.trim().startsWith("test_sk_");
     }
 
+    private boolean shouldBypassTestPayout() {
+        return isTestPayoutSecretKey();
+    }
+
+    private String createTestPayoutRef(Long orderId, Long itemId) {
+        if (orderId != null && itemId != null) {
+            return "TEST-PAYOUT-" + orderId + "-" + itemId;
+        }
+        return "TEST-PAYOUT-" + UUID.randomUUID();
+    }
+
+    private String createTransactionDescription(Long orderId) {
+        return trimToLength("정산" + (orderId == null ? "" : orderId), 7);
+    }
+
     private boolean looksLikeEncryptedPayload(String value) {
         if (isBlank(value)) {
             return false;
@@ -553,12 +610,22 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
     private record SellerRegisterRequest(
             String refSellerId,
             String businessType,
-            SellerCustomer customer,
+            SellerCompany company,
+            SellerIndividual individual,
             SellerAccount account
     ) {
     }
 
-    private record SellerCustomer(
+    private record SellerCompany(
+            String name,
+            String representativeName,
+            String businessRegistrationNumber,
+            String email,
+            String phone
+    ) {
+    }
+
+    private record SellerIndividual(
             String name,
             String email,
             String phone
@@ -575,9 +642,10 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
     private record PayoutRequest(
             String refPayoutId,
             String destination,
-            PayoutAmount amount,
             String scheduleType,
-            String scheduledAt
+            String payoutDate,
+            PayoutAmount amount,
+            String transactionDescription
     ) {
     }
 
