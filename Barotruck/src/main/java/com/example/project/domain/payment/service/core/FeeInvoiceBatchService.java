@@ -1,7 +1,9 @@
 package com.example.project.domain.payment.service.core;
 
 import com.example.project.domain.payment.domain.FeeInvoice;
+import com.example.project.domain.payment.domain.FeeAutoChargeAttempt;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.FeeInvoiceStatus;
+import com.example.project.domain.payment.repository.FeeAutoChargeAttemptRepository;
 import com.example.project.domain.payment.repository.FeeInvoiceRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.payment.service.client.FeeAutoChargeClient;
@@ -23,6 +25,7 @@ public class FeeInvoiceBatchService {
 
     private final FeeInvoiceService feeInvoiceService;
     private final FeeInvoiceRepository feeInvoiceRepository;
+    private final FeeAutoChargeAttemptRepository feeAutoChargeAttemptRepository;
     private final TransportPaymentRepository transportPaymentRepository;
     private final FeeAutoChargeClient feeAutoChargeClient;
 
@@ -61,12 +64,40 @@ public class FeeInvoiceBatchService {
 
         int paidCount = 0;
         for (FeeInvoice invoice : targets) {
-            var chargeResult = feeAutoChargeClient.charge(invoice.getShipperUserId(), invoice.getTotalFee());
+            var chargeResult = feeAutoChargeClient.charge(
+                    invoice.getInvoiceId(),
+                    invoice.getShipperUserId(),
+                    invoice.getTotalFee()
+            );
             if (chargeResult.success()) {
                 invoice.markPaid();
                 paidCount++;
+                feeAutoChargeAttemptRepository.save(
+                        FeeAutoChargeAttempt.success(
+                                invoice.getInvoiceId(),
+                                invoice.getShipperUserId(),
+                                null,
+                                chargeResult.orderId(),
+                                chargeResult.paymentKey(),
+                                chargeResult.transactionId(),
+                                invoice.getTotalFee(),
+                                chargeResult.rawPayload()
+                        )
+                );
             } else {
                 invoice.markOverdue();
+                feeAutoChargeAttemptRepository.save(
+                        FeeAutoChargeAttempt.failed(
+                                invoice.getInvoiceId(),
+                                invoice.getShipperUserId(),
+                                null,
+                                chargeResult.orderId(),
+                                invoice.getTotalFee(),
+                                chargeResult.failCode(),
+                                chargeResult.failReason(),
+                                chargeResult.rawPayload()
+                        )
+                );
             }
             feeInvoiceRepository.save(invoice);
         }

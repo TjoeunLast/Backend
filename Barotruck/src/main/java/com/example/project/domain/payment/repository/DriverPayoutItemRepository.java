@@ -10,12 +10,14 @@ import java.util.Optional;
 public interface DriverPayoutItemRepository extends JpaRepository<DriverPayoutItem, Long> {
     Optional<DriverPayoutItem> findTopByOrderByItemIdDesc();
     Optional<DriverPayoutItem> findByOrderId(Long orderId);
+    Optional<DriverPayoutItem> findByPayoutRef(String payoutRef);
     boolean existsByOrderId(Long orderId);
 
     List<DriverPayoutItem> findAllByStatusIn(List<PayoutStatus> statuses);
 
     long countByBatch_BatchId(Long batchId);
     long countByBatch_BatchIdAndStatus(Long batchId, PayoutStatus status);
+    long countByBatch_BatchIdAndStatusIn(Long batchId, List<PayoutStatus> statuses);
 }
 
 

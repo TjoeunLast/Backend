@@ -129,13 +129,32 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("유저가 없습니다."));
 
+        return replaceOrderImage(order, file, "profiles");
+    }
+
+    @Transactional
+    public String uploadArrivalPhoto(Long orderId, Long driverNo, MultipartFile file) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("주문이 없습니다."));
+
+        validateAssignedDriver(order, driverNo);
+        return replaceOrderImage(order, file, "orders/arrival-photos");
+    }
+
+    @Transactional(readOnly = true)
+    public String getArrivalPhotoUrl(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        return (order.getProfileImage() != null) ? order.getProfileImage().getImageUrl() : "";
+    }
+
+    private String replaceOrderImage(Order order, MultipartFile file, String dirName) {
         // 1. 기존 이미지가 이미 있으면 S3에서 먼저 삭제 (찌꺼기 제거)
         if (order.getProfileImage() != null) {
             s3ImageService.delete(order.getProfileImage().getS3Key());
         }
 
         // 2. 새 이미지 S3 업로드
-        ImageUploadResponse res = s3ImageService.upload(file, "profiles");
+        ImageUploadResponse res = s3ImageService.upload(file, dirName);
 
         // 3. 유저 엔티티 필드 업데이트 (DB 저장)
         order.updateProfileImage(res);
@@ -381,7 +400,9 @@ public class OrderService {
 
         if ("COMPLETED".equals(normalizedStatus)) {
             try {
-                transportPaymentService.ensureReadyPaymentRecord(orderId);
+                if (transportPaymentService.ensureReadyPaymentRecord(orderId) == null) {
+                    System.err.println("결제 READY 레코드 생성 건너뜀: 지원되지 않는 결제수단일 수 있습니다. orderId=" + orderId);
+                }
             } catch (Exception e) {
                 System.err.println("결제 READY 레코드 생성 실패: " + e.getMessage());
             }
@@ -431,6 +452,12 @@ public class OrderService {
             throw new IllegalArgumentException("unsupported order status: " + rawStatus);
         }
         return status;
+    }
+
+    private void validateAssignedDriver(Order order, Long driverNo) {
+        if (order.getDriverNo() == null || driverNo == null || !order.getDriverNo().equals(driverNo)) {
+            throw new IllegalStateException("해당 주문의 담당 기사가 아닙니다.");
+        }
     }
 
     public List<OrderResponse> findMyDrivingOrders(Long driverId) {

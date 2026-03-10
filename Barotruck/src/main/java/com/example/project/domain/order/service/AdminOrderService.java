@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -105,18 +107,16 @@ public class AdminOrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderResponse> getAllOrdersForAdmin() {
-        return orderRepository.findAll().stream()
-                .map(OrderResponse::from)
-                .toList();
+    public Page<OrderResponse> getAllOrdersForAdmin(Pageable pageable) {
+        return orderRepository.findAllByOrderByCreatedAtDesc(pageable)
+                .map(OrderResponse::from);
     }
 
     @Transactional(readOnly = true)
-    public List<OrderResponse> getCancelledOrdersForAdmin() {
+    public Page<OrderResponse> getCancelledOrdersForAdmin(Pageable pageable) {
         List<String> cancelStatuses = List.of("CANCELLED_BY_USER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN");
-        return orderRepository.findByStatusInOrderByCreatedAtDesc(cancelStatuses).stream()
-                .map(OrderResponse::from)
-                .toList();
+        return orderRepository.findByStatusIn(cancelStatuses, pageable)
+                .map(OrderResponse::from);
     }
 
     @Transactional(readOnly = true)

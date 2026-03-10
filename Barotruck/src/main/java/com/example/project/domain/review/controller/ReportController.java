@@ -55,7 +55,7 @@ public class ReportController {
             @AuthenticationPrincipal Users currentUser,
             @PageableDefault(size = 20) Pageable pageable,
             NativeWebRequest webRequest) {
-        if (currentUser.getRole() != Role.ADMIN) {
+        if (currentUser == null || currentUser.getRole() != Role.ADMIN) {
             throw new IllegalStateException("관리자 권한이 필요합니다.");
         }
         List<ReportResponseDto> reports = reportService.getAllReports();
@@ -63,6 +63,16 @@ public class ReportController {
             return ResponseEntity.ok(reports);
         }
         return ResponseEntity.ok(PaginationUtils.paginate(reports, pageable));
+    }
+
+    @GetMapping("/admin/{reportId}")
+    public ResponseEntity<ReportResponseDto> getReportDetail(
+            @PathVariable("reportId") Long reportId,
+            @AuthenticationPrincipal Users currentUser) {
+        if (currentUser == null || currentUser.getRole() != Role.ADMIN) {
+            throw new IllegalStateException("관리자 권한이 필요합니다.");
+        }
+        return ResponseEntity.ok(reportService.getReportDetail(reportId));
     }
 
     // 내가 신고한 목록 조회 (최신순)
@@ -78,7 +88,7 @@ public class ReportController {
             @PathVariable("reportId") Long reportId,
             @RequestParam("status") String status,
             @AuthenticationPrincipal Users currentUser) {
-        if (currentUser.getRole() != Role.ADMIN) {
+        if (currentUser == null || currentUser.getRole() != Role.ADMIN) {
             return ResponseEntity.ok(false);
         }
         reportService.updateReportStatus(reportId, status);
@@ -89,7 +99,7 @@ public class ReportController {
     public ResponseEntity<Boolean> deleteReport(
             @PathVariable("reportId") Long reportId,
             @AuthenticationPrincipal Users currentUser) {
-        if (currentUser.getRole() != Role.ADMIN) {
+        if (currentUser == null || currentUser.getRole() != Role.ADMIN) {
             return ResponseEntity.ok(false);
         }
         reportService.deleteReport(reportId);

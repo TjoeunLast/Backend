@@ -99,6 +99,26 @@ public class PaymentGatewayTransaction {
     @Column(name = "APPROVED_AT")
     private LocalDateTime approvedAt;
 
+    // PG가 마지막으로 알려준 상태 텍스트
+    @Column(name = "GATEWAY_STATUS", length = 100)
+    private String gatewayStatus;
+
+    // 취소 사유
+    @Column(name = "CANCEL_REASON", length = 1000)
+    private String cancelReason;
+
+    // 취소 금액
+    @Column(name = "CANCELED_AMOUNT", precision = 18, scale = 2)
+    private BigDecimal canceledAmount;
+
+    // 취소 완료 시각
+    @Column(name = "CANCELED_AT")
+    private LocalDateTime canceledAt;
+
+    // 취소 거래 식별자
+    @Column(name = "CANCEL_TRANSACTION_ID", length = 200)
+    private String cancelTransactionId;
+
     // 실패 코드
     @Column(name = "FAIL_CODE", length = 100)
     private String failCode;
@@ -185,6 +205,7 @@ public class PaymentGatewayTransaction {
         this.failCode = null;
         this.failMessage = null;
         this.status = GatewayTxStatus.CONFIRMED;
+        this.gatewayStatus = GatewayTxStatus.CONFIRMED.name();
         this.approvedAt = LocalDateTime.now();
         this.nextRetryAt = null;
     }
@@ -199,6 +220,7 @@ public class PaymentGatewayTransaction {
         this.failMessage = failMessage;
         this.rawPayload = rawPayload;
         this.status = GatewayTxStatus.FAILED;
+        this.gatewayStatus = GatewayTxStatus.FAILED.name();
         if (retryable) {
             scheduleNextRetry();
         } else {
@@ -209,8 +231,23 @@ public class PaymentGatewayTransaction {
 
     // 취소 반영
     public void markCanceled(String rawPayload) {
+        markCanceled(rawPayload, null, null, null, null);
+    }
+
+    public void markCanceled(
+            String rawPayload,
+            String cancelReason,
+            BigDecimal canceledAmount,
+            LocalDateTime canceledAt,
+            String cancelTransactionId
+    ) {
         this.rawPayload = rawPayload;
         this.status = GatewayTxStatus.CANCELED;
+        this.gatewayStatus = GatewayTxStatus.CANCELED.name();
+        this.cancelReason = cancelReason;
+        this.canceledAmount = canceledAmount;
+        this.canceledAt = canceledAt == null ? LocalDateTime.now() : canceledAt;
+        this.cancelTransactionId = cancelTransactionId;
         this.nextRetryAt = null;
     }
 
@@ -232,6 +269,13 @@ public class PaymentGatewayTransaction {
         if (payChannel != null) {
             this.payChannel = payChannel;
         }
+    }
+
+    public void applyGatewayStatus(String gatewayStatus) {
+        if (gatewayStatus == null || gatewayStatus.isBlank()) {
+            return;
+        }
+        this.gatewayStatus = gatewayStatus;
     }
 
     public boolean isExpired(LocalDateTime now) {

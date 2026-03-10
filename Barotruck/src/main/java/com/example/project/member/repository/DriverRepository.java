@@ -19,4 +19,6 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
  // 이 메서드를 추가해야 OrderService에서 사용할 수 있습니다.
     // 엔티티 내의 연관관계 필드명(user) + 해당 엔티티의 ID 필드명(userId) 조합입니다.
     Optional<Driver> findByUser_UserId(Long userId);
+
+    Optional<Driver> findByTossPayoutSellerId(String tossPayoutSellerId);
 }

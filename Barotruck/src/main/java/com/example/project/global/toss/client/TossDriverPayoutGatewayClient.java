@@ -439,6 +439,9 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
         String raw = normalize(exception == null ? null : exception.getMessage());
         JsonNode node = TossPayoutCryptoSupport.parseMaybeEncryptedJson(objectMapper, raw, payoutSecurityKey);
         if (node == null) {
+            if (looksLikeEncryptedPayload(raw)) {
+                return "failed to decrypt toss payout error response. verify TOSS_PAYOUT_SECURITY_KEY";
+            }
             return raw;
         }
         return firstNonBlank(
@@ -452,6 +455,13 @@ public class TossDriverPayoutGatewayClient implements DriverPayoutGatewayClient 
     private String encodeBasicAuth(String secretKey) {
         return Base64.getEncoder()
                 .encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
+    }
+
+    private boolean looksLikeEncryptedPayload(String value) {
+        if (isBlank(value)) {
+            return false;
+        }
+        return value.chars().filter(ch -> ch == '.').count() == 4;
     }
 
     private String readText(JsonNode node, String fieldName) {
