@@ -2,9 +2,11 @@ package com.example.project.domain.settlement.service;
 
 import com.example.project.domain.payment.domain.PaymentDispute;
 import com.example.project.domain.payment.domain.TransportPayment;
+import com.example.project.domain.payment.domain.DriverPayoutItem;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeReason;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeStatus;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
+import com.example.project.domain.payment.repository.DriverPayoutItemRepository;
 import com.example.project.domain.payment.repository.PaymentDisputeRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.settlement.domain.Settlement;
@@ -36,6 +38,7 @@ public class SettlementService {
     private final UsersRepository usersRepository;
     private final TransportPaymentRepository transportPaymentRepository;
     private final PaymentDisputeRepository paymentDisputeRepository;
+    private final DriverPayoutItemRepository driverPayoutItemRepository;
 
     public SettlementResponse updateSettlementStatus(
             Long orderId,
@@ -376,6 +379,9 @@ public class SettlementService {
         TransportPayment transportPayment = settlement.getOrder() == null
                 ? null
                 : transportPaymentRepository.findByOrderId(settlement.getOrder().getOrderId()).orElse(null);
+        DriverPayoutItem payoutItem = settlement.getOrder() == null
+                ? null
+                : driverPayoutItemRepository.findByOrderId(settlement.getOrder().getOrderId()).orElse(null);
 
         // 2. 차주 이름 조회 로직 추가
         String driverName = "미지정";
@@ -415,6 +421,7 @@ public class SettlementService {
                 .accountNum(accountNum)   // 빌더에 추가
                 .shipperName(shipperName)
                 .bizNumber(bizNumber)
+                .orderStatus(settlement.getOrder() != null ? settlement.getOrder().getStatus() : null)
                 .paymentId(transportPayment != null ? transportPayment.getPaymentId() : null)
                 .paymentMethod(transportPayment != null && transportPayment.getMethod() != null ? transportPayment.getMethod().name() : null)
                 .paymentTiming(transportPayment != null && transportPayment.getPaymentTiming() != null ? transportPayment.getPaymentTiming().name() : null)
@@ -431,6 +438,11 @@ public class SettlementService {
                 .totalPrice(settlement.getTotalPrice())
                 .feeRate(settlement.getFeeRate())
                 .status(settlement.getStatus() == null ? null : settlement.getStatus().name())
+                .payoutStatus(payoutItem != null && payoutItem.getStatus() != null ? payoutItem.getStatus().name() : null)
+                .payoutFailureReason(payoutItem != null ? payoutItem.getFailureReason() : null)
+                .payoutRef(payoutItem != null ? payoutItem.getPayoutRef() : null)
+                .payoutRequestedAt(payoutItem != null ? payoutItem.getRequestedAt() : null)
+                .payoutCompletedAt(payoutItem != null ? payoutItem.getCompletedAt() : null)
                 .feeDate(settlement.getFeeDate())
                 .feeCompleteDate(settlement.getFeeCompleteDate())
                 .build();
