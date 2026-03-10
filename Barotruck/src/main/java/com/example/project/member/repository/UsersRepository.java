@@ -1,5 +1,6 @@
 package com.example.project.member.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,6 +34,8 @@ public interface UsersRepository extends JpaRepository<Users, Long>{
 	           "LEFT JOIN FETCH u.shipper " +
 	           "WHERE u.userId = :userId")
 	    Optional<Users> findByIdWithAllDetails(@Param("userId") Long userId);
+
+	List<Users> findAllByDelflagAndSuspendedUntilLessThanEqual(String delflag, LocalDateTime suspendedUntil);
 
 
 }

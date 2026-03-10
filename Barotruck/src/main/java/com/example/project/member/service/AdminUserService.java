@@ -5,11 +5,14 @@ import com.example.project.member.domain.Users;
 import com.example.project.member.dto.AdminUserResponse;
 import com.example.project.member.dto.AdminUserResponse.AdminUserDetailResponse;
 import com.example.project.member.repository.UsersRepository;
+import com.example.project.security.token.TokenRepository;
 import com.example.project.security.user.Role;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -18,6 +21,7 @@ public class AdminUserService {
 
     private final UsersRepository repository;
     private final OrderRepository orderRepository; // ✅ 주문/운행 레포지토리 주입
+    private final TokenRepository tokenRepository;
     
     @Transactional(readOnly = true)
     public List<AdminUserResponse> getAdminUserList(Role role) {
@@ -50,8 +54,20 @@ public class AdminUserService {
     public void deleteUserById(Long userId) {
         var user = repository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 유저를 찾을 수 없습니다."));
-        user.setDelflag("A");
-        user.setDeletedate(java.time.LocalDate.now());
+        user.suspendPermanently();
+        revokeAllUserTokens(user);
+        repository.save(user);
+    }
+
+    @Transactional
+    public void suspendUserByDays(Long userId, int days) {
+        var user = repository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 유저를 찾을 수 없습니다."));
+        if (user.isPermanentlySuspended()) {
+            throw new IllegalStateException("영구 정지 상태인 회원입니다.");
+        }
+        user.suspendTemporarily(LocalDateTime.now().plusDays(days));
+        revokeAllUserTokens(user);
         repository.save(user);
     }
 
@@ -59,8 +75,26 @@ public class AdminUserService {
     public void restoreUserById(Long userId) {
         var user = repository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 유저를 찾을 수 없습니다."));
-        user.setDelflag("N");
-        user.setDeletedate(null);
+        user.restore();
         repository.save(user);
+    }
+
+    @Transactional
+    @Scheduled(cron = "${admin.user.suspension.release-cron:0 0 * * * *}")
+    public void releaseExpiredSuspensions() {
+        List<Users> expiredUsers = repository.findAllByDelflagAndSuspendedUntilLessThanEqual("A", LocalDateTime.now());
+        expiredUsers.forEach(Users::restore);
+    }
+
+    private void revokeAllUserTokens(Users user) {
+        var validUserTokens = tokenRepository.findAllValidTokenByUser(user.getUserId());
+        if (validUserTokens.isEmpty()) {
+            return;
+        }
+        validUserTokens.forEach(token -> {
+            token.setExpired(true);
+            token.setRevoked(true);
+        });
+        tokenRepository.saveAll(validUserTokens);
     }
 }

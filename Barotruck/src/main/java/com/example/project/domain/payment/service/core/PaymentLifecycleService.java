@@ -36,6 +36,7 @@ public class PaymentLifecycleService {
     private final FeePolicyService feePolicyService;
     private final SettlementRepository settlementRepository;
     private final DriverPayoutItemRepository driverPayoutItemRepository;
+    private final DriverPayoutService driverPayoutService;
     private final EntityManager entityManager;
     private final NotificationService notificationService;
 
@@ -134,6 +135,7 @@ public class PaymentLifecycleService {
 
         TransportPayment saved = transportPaymentRepository.save(payment);
         completeSettlementOnConfirm(orderId);
+        driverPayoutService.tryAutoRequestPayoutForOrder(orderId, "PAYMENT_CONFIRMED_BY_DRIVER");
         sendPaymentNotificationSafely(
                 payment.getShipperUserId(),
                 "정산 확인 완료",
