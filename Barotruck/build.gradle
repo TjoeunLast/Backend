@@ -115,6 +115,9 @@ dependencies {
     // 12. Firebase Admin SDK (FCM 알림을 위한 라이브러리)
     implementation 'com.google.firebase:firebase-admin:9.2.0'
 
+    // 13. Toss payout API JWE encryption
+    implementation 'com.nimbusds:nimbus-jose-jwt:9.37.3'
+
 
 
 }
