@@ -18,6 +18,7 @@ public class AdminUserResponse {
     private String email;
     private LocalDate enrolldate;
     private String delflag;
+    private LocalDateTime suspendedUntil;
 
     public static AdminUserResponse from(Users user) {
         return new AdminUserResponse(
@@ -27,7 +28,8 @@ public class AdminUserResponse {
                 user.getPhone(),
                 user.getEmail(),
                 user.getEnrolldate(),
-                user.getDelflag()
+                user.getDelflag(),
+                user.getSuspendedUntil()
         );
     }
 
@@ -41,6 +43,7 @@ public class AdminUserResponse {
         private Integer age;
         private LocalDate deletedate;
         private String delflag;
+        private LocalDateTime suspendedUntil;
         private String email;
         private LocalDate enrolldate;
         private String gender;
@@ -79,6 +82,7 @@ public class AdminUserResponse {
                     .age(user.getAge())
                     .deletedate(user.getDeletedate())
                     .delflag(user.getDelflag())
+                    .suspendedUntil(user.getSuspendedUntil())
                     .email(user.getEmail())
                     .enrolldate(user.getEnrolldate())
                     .gender(user.getGender())

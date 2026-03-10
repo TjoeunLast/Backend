@@ -74,6 +74,10 @@ public class Users implements UserDetails {
     private String delflag = "N";
 
     private LocalDate deletedate;
+
+    @Column(name = "suspended_until")
+    private LocalDateTime suspendedUntil;
+
     @Column(length = 1)
     private String regflag;
 
@@ -210,5 +214,23 @@ public class Users implements UserDetails {
     // 복구 메서드
     public void restore() {
         this.delflag = "N";
+        this.deletedate = null;
+        this.suspendedUntil = null;
+    }
+
+    public void suspendTemporarily(LocalDateTime suspendedUntil) {
+        this.delflag = "A";
+        this.deletedate = LocalDate.now();
+        this.suspendedUntil = suspendedUntil;
+    }
+
+    public void suspendPermanently() {
+        this.delflag = "A";
+        this.deletedate = LocalDate.now();
+        this.suspendedUntil = null;
+    }
+
+    public boolean isPermanentlySuspended() {
+        return "A".equals(this.delflag) && this.suspendedUntil == null;
     }
 }
