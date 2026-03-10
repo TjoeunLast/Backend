@@ -159,13 +159,12 @@ public class UsersService {
     // 유저 정보 조회 로직 (Neighborhood 정보 포함)
     @Transactional(readOnly = true)
     public UserResponseDto getUserInfo(Long userId) {
-        Users user = repository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 유저를 찾을 수 없습니다."));
+        // findById 대신 모든 정보를 조인해서 가져오는 메서드 호출
+        Users user = repository.findByIdWithAllDetails(userId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 유저를 찾을 수 없습니다. ID: " + userId));
 
-        // 프론트엔드에 필요한 정보만 골라서 DTO로 변환
         return UserResponseDto.from(user);
     }
-
     
     /**
      * 유저 정보 수정
