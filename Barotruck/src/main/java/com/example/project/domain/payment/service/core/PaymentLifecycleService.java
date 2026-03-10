@@ -9,6 +9,7 @@ import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.Paymen
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
 import com.example.project.domain.payment.port.OrderPort;
 import com.example.project.domain.payment.port.UserPort;
+import com.example.project.domain.payment.repository.DriverPayoutItemRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.settlement.domain.Settlement;
 import com.example.project.domain.settlement.domain.SettlementStatus;
@@ -34,6 +35,7 @@ public class PaymentLifecycleService {
     private final UserPort userPort;
     private final FeePolicyService feePolicyService;
     private final SettlementRepository settlementRepository;
+    private final DriverPayoutItemRepository driverPayoutItemRepository;
     private final EntityManager entityManager;
     private final NotificationService notificationService;
 
@@ -71,8 +73,7 @@ public class PaymentLifecycleService {
                 firstPaymentPromoEligible
         );
 
-        TransportPayment transportPayment = transportPaymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalStateException("transport payment not initialized. orderId=" + orderId));
+        TransportPayment transportPayment = requireInitializedPayment(orderId);
         PaymentMethod effectiveMethod = resolveManualPaymentMethod(method, transportPayment);
         validateManualPaymentProof(effectiveMethod, proofUrl);
         transportPayment.applyPricingSnapshots(
@@ -165,8 +166,7 @@ public class PaymentLifecycleService {
                 firstPaymentPromoEligible
         );
 
-        TransportPayment payment = transportPaymentRepository.findByOrderId(tx.getOrderId())
-                .orElseThrow(() -> new IllegalStateException("transport payment not initialized. orderId=" + tx.getOrderId()));
+        TransportPayment payment = requireInitializedPayment(tx.getOrderId());
 
         payment.applyPaymentTiming(resolveGatewayPaymentTiming(tx));
         payment.applyPricingSnapshots(
@@ -252,6 +252,53 @@ public class PaymentLifecycleService {
         );
 
         return transportPaymentRepository.save(readyPayment);
+    }
+
+    @Transactional
+    public TransportPayment requireInitializedPayment(Long orderId) {
+        TransportPayment payment = transportPaymentRepository.findByOrderId(orderId).orElse(null);
+        if (payment != null) {
+            return payment;
+        }
+
+        TransportPayment initialized = ensureReadyPaymentRecord(orderId);
+        if (initialized == null) {
+            throw new IllegalStateException("transport payment could not be initialized. unsupported payMethod. orderId=" + orderId);
+        }
+        return initialized;
+    }
+
+    @Transactional
+    public TransportPayment applyCanceledFromGatewayTx(PaymentGatewayTransaction tx) {
+        if (tx == null) {
+            throw new IllegalArgumentException("gateway transaction is required");
+        }
+
+        TransportPayment payment = transportPaymentRepository.findByOrderId(tx.getOrderId()).orElse(null);
+        if (payment == null) {
+            throw new IllegalStateException("transport payment not found. orderId=" + tx.getOrderId());
+        }
+        if (payment.getStatus() == TransportPaymentStatus.CANCELLED) {
+            return payment;
+        }
+        if (driverPayoutItemRepository.findByOrderId(tx.getOrderId()).isPresent()) {
+            return payment;
+        }
+        if (payment.getStatus() != TransportPaymentStatus.PAID && payment.getStatus() != TransportPaymentStatus.READY) {
+            return payment;
+        }
+
+        payment.cancel();
+        TransportPayment saved = transportPaymentRepository.save(payment);
+        settlementRepository.findByOrderId(tx.getOrderId()).ifPresent(settlement -> {
+            if (settlement.getStatus() != SettlementStatus.WAIT) {
+                settlement.setStatus(SettlementStatus.READY);
+                settlement.setFeeCompleteDate(null);
+            }
+            settlement.setField5(defaultIfBlank(tx.getCancelReason(), settlement.getField5()));
+            settlementRepository.save(settlement);
+        });
+        return saved;
     }
 
     private void upsertSettlementOnPaid(Long orderId, Long shipperUserId, BigDecimal grossAmount, FeePolicyService.FeeResult fee) {
@@ -365,6 +412,13 @@ public class PaymentLifecycleService {
             return existing.getMethod();
         }
         return PaymentMethod.TRANSFER;
+    }
+
+    private String defaultIfBlank(String value, String defaultValue) {
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        return value.trim();
     }
 
     private void validateManualPaymentProof(PaymentMethod method, String proofUrl) {

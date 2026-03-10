@@ -2,8 +2,11 @@ package com.example.project.domain.review.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.project.domain.review.dto.ReviewRequestDto;
 import com.example.project.domain.review.dto.ReviewResponseDto;
 import com.example.project.domain.review.service.ReviewService;
+import com.example.project.global.api.PaginationUtils;
 import com.example.project.member.domain.Users;
 import com.example.project.security.user.Role;
 
@@ -53,12 +57,18 @@ public class ReviewController {
 
     // 전체 리뷰 조회 (관리자)
     @GetMapping("/admin/all")
-    public ResponseEntity<List<ReviewResponseDto>> getAllReviews(
-            @AuthenticationPrincipal Users currentUser) {
+    public ResponseEntity<?> getAllReviews(
+            @AuthenticationPrincipal Users currentUser,
+            @PageableDefault(size = 20) Pageable pageable,
+            NativeWebRequest webRequest) {
         if (currentUser.getRole() != Role.ADMIN) {
             throw new IllegalStateException("관리자 권한이 필요합니다.");
         }
-        return ResponseEntity.ok(reviewService.getAllReviews());
+        List<ReviewResponseDto> reviews = reviewService.getAllReviews();
+        if (!PaginationUtils.isPagedRequest(webRequest)) {
+            return ResponseEntity.ok(reviews);
+        }
+        return ResponseEntity.ok(PaginationUtils.paginate(reviews, pageable));
     }
 
     // 내가 쓴 리뷰 조회

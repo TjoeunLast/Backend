@@ -381,7 +381,9 @@ public class OrderService {
 
         if ("COMPLETED".equals(normalizedStatus)) {
             try {
-                transportPaymentService.ensureReadyPaymentRecord(orderId);
+                if (transportPaymentService.ensureReadyPaymentRecord(orderId) == null) {
+                    System.err.println("결제 READY 레코드 생성 건너뜀: 지원되지 않는 결제수단일 수 있습니다. orderId=" + orderId);
+                }
             } catch (Exception e) {
                 System.err.println("결제 READY 레코드 생성 실패: " + e.getMessage());
             }

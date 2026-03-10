@@ -35,18 +35,24 @@ public class ReportService {
 
     @Transactional
     public void createReport(ReportRequestDto dto, Users currentUser) {
-        Order order = orderRepository.findById(dto.getOrderId())
-                .orElseThrow(() -> new IllegalArgumentException("해당 오더가 없습니다."));
+    	Order order = null;
+        Users target = null;
 
-        // 공통 함수로 신고 대상(Target) 특정
-        Long targetId = order.getOpponentId(currentUser.getUserId());
-        Users target = userRepository.findById(targetId)
-                .orElseThrow(() -> new IllegalArgumentException("신고 대상자를 찾을 수 없습니다."));
+        // 1. orderId가 있을 때만 오더 및 상대방 정보 조회
+        if (dto.getOrderId() != null) {
+            order = orderRepository.findById(dto.getOrderId())
+                    .orElseThrow(() -> new IllegalArgumentException("해당 오더가 없습니다."));
 
+            Long targetId = order.getOpponentId(currentUser.getUserId());
+            target = userRepository.findById(targetId)
+                    .orElseThrow(() -> new IllegalArgumentException("신고 대상자를 찾을 수 없습니다."));
+        }
+
+        // 2. 빌더 패턴으로 저장 (order와 target은 null일 수 있음)
         Report report = Report.builder()
-                .order(order)
                 .reporter(currentUser)
-                .target(target)
+                .target(target)    // null 가능
+                .order(order)      // null 가능
                 .reportType(dto.getReportType())
                 .description(dto.getDescription())
                 .status("PENDING")
@@ -56,8 +62,8 @@ public class ReportService {
                 .title(dto.getTitle())
                 .build();
 
+        System.out.println("신고/문의 저장 완료!");
         Report saved = reportRepository.save(report);
-        sendReportNotificationToAdmins(saved);
     }
 
     @Transactional(readOnly = true)
@@ -139,6 +145,13 @@ public class ReportService {
                 .stream()
                 .map(ReportResponseDto::new)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public ReportResponseDto getReportDetail(Long reportId) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new IllegalArgumentException("신고 내역이 없습니다."));
+        return new ReportResponseDto(report);
     }
 
     private void sendReportNotificationSafely(Users recipient, String title, String body, Long targetId) {

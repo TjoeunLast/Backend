@@ -42,7 +42,7 @@ public class Report {
     private Users reporter;
     
     // 신고 대상자
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "target_id", nullable = true)
     private Users target;
 
@@ -64,4 +64,8 @@ public class Report {
     
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+    
+    public void setTarget(Users target) {
+    	this.target = target;
+    }
 }

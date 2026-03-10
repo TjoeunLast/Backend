@@ -46,10 +46,16 @@ public class DriverService {
                 .career(request.getCareer())
                 .bankName(request.getBankName())
                 .accountNum(request.getAccountNum())
+                .tossPayoutSellerId(driver.getTossPayoutSellerId())
+                .tossPayoutSellerRef(driver.getTossPayoutSellerRef())
+                .tossPayoutSellerStatus(driver.getTossPayoutSellerStatus())
                 .type(request.getType())
                 .isSuspended(driver.getIsSuspended() == null ? "N" : driver.getIsSuspended()) // 기본값 유지
                 .user(user)
                 .address(request.getAddress())
+                .lat(request.getLat())
+                .lng(request.getLng())
+                .nbhId(request.getNbhId())
                 .build();
 
         driverRepository.save(updatedDriver);
