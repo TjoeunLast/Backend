@@ -149,6 +149,7 @@ public class TransportPayment {
         this.status = TransportPaymentStatus.PAID;
         this.proofUrl = proofUrl;
         this.paidAt = (paidAt != null) ? paidAt : LocalDateTime.now();
+        this.confirmedAt = null;
     }
 
     // 차주 결제 확인 처리
@@ -167,9 +168,32 @@ public class TransportPayment {
         this.status = status;
     }
 
+    public void resetToReady() {
+        this.status = TransportPaymentStatus.READY;
+        this.proofUrl = null;
+        this.paidAt = null;
+        this.confirmedAt = null;
+        this.pgTid = null;
+    }
+
+    public void cancel() {
+        this.status = TransportPaymentStatus.CANCELLED;
+        this.proofUrl = null;
+        this.paidAt = null;
+        this.confirmedAt = null;
+        this.pgTid = null;
+    }
+
     // PG 거래 식별자 반영
     public void setPgTid(String pgTid) {
         this.pgTid = pgTid;
+    }
+
+    public void applyMethod(PaymentMethod method) {
+        if (method == null) {
+            return;
+        }
+        this.method = method;
     }
 
     public void applyPaymentTiming(PaymentTiming paymentTiming) {

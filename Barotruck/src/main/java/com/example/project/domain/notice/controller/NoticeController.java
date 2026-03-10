@@ -44,7 +44,8 @@ public class NoticeController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Long> create(
     		@RequestBody NoticeRequest request, 
-    		@AuthenticationPrincipal Users admin) {
+    		@AuthenticationPrincipal Users admin
+    		) {
         return ResponseEntity.ok(noticeService.createNotice(request, admin));
     }
 

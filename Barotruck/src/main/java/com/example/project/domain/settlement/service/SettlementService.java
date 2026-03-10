@@ -1,14 +1,19 @@
 package com.example.project.domain.settlement.service;
 
-import com.example.project.domain.order.domain.Order;
-import com.example.project.domain.order.domain.embedded.OrderSnapshot;
-import com.example.project.domain.order.repository.OrderRepository;
+import com.example.project.domain.payment.domain.PaymentDispute;
+import com.example.project.domain.payment.domain.TransportPayment;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeReason;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeStatus;
+import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
+import com.example.project.domain.payment.repository.PaymentDisputeRepository;
+import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.settlement.domain.Settlement;
 import com.example.project.domain.settlement.domain.SettlementStatus;
 import com.example.project.domain.settlement.dto.SettlementRegionStatResponse;
-import com.example.project.domain.settlement.dto.SettlementRequest;
 import com.example.project.domain.settlement.dto.SettlementResponse;
+import com.example.project.domain.settlement.dto.SettlementStatusSummaryResponse;
 import com.example.project.domain.settlement.dto.SettlementSummaryResponse;
+import com.example.project.domain.settlement.dto.UpdateSettlementStatusRequest;
 import com.example.project.domain.settlement.repository.SettlementRepository;
 import com.example.project.member.domain.Users;
 import com.example.project.member.repository.UsersRepository;
@@ -27,72 +32,30 @@ import java.util.stream.Collectors;
 @Transactional
 public class SettlementService {
 
-    private static final long DEFAULT_FEE_RATE = 10L;
-
     private final SettlementRepository settlementRepository;
-    private final OrderRepository orderRepository;
-    private final UsersRepository usersRepository; // 1. 추가: 유저 조회를 위해 필요
+    private final UsersRepository usersRepository;
+    private final TransportPaymentRepository transportPaymentRepository;
+    private final PaymentDisputeRepository paymentDisputeRepository;
 
-    /**
-     * 정산 데이터 초기 생성/갱신
-     * - 화주 또는 관리자만 호출 가능
-     */
-    public void initiateSettlement(SettlementRequest request, Users user) {
-        requireAuthenticated(user);
-
-        Order order = orderRepository.findById(request.getOrderId())
-                .orElseThrow(() -> new IllegalArgumentException("order not found"));
-
-        validateOwnerOrAdmin(order, user);
-
-        OrderSnapshot snapshot = order.getSnapshot();
-        if (snapshot == null) {
-            throw new IllegalStateException("order snapshot not found");
+    public SettlementResponse updateSettlementStatus(
+            Long orderId,
+            UpdateSettlementStatusRequest request,
+            Users currentUser
+    ) {
+        requireAuthenticated(currentUser);
+        requireAdmin(currentUser);
+        if (request == null || request.getStatus() == null) {
+            throw new IllegalArgumentException("status is required");
         }
 
-        long cargoPrice =
-                nullSafe(snapshot.getBasePrice())
-                        + nullSafe(snapshot.getLaborFee())
-                        + nullSafe(snapshot.getPackagingPrice())
-                        + nullSafe(snapshot.getInsuranceFee());
+        Settlement settlement = settlementRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("settlement not found. orderId=" + orderId));
+        TransportPayment payment = transportPaymentRepository.findByOrderId(orderId).orElse(null);
+        PaymentDispute dispute = paymentDisputeRepository.findByOrderId(orderId).orElse(null);
 
-        long couponDiscount = nullSafe(request.getCouponDiscount());
-        long levelDiscount = nullSafe(request.getLevelDiscount());
-        long platformFee = (cargoPrice * DEFAULT_FEE_RATE) / 100;
-        long totalPrice = Math.max(cargoPrice + platformFee - couponDiscount - levelDiscount, 0L);
-
-        Settlement settlement = settlementRepository.findByOrderId(order.getOrderId())
-                .orElseGet(() -> Settlement.builder()
-                        .order(order)
-                        .user(user)
-                        .build());
-
-        settlement.setUser(user);
-        settlement.setLevelDiscount(levelDiscount);
-        settlement.setCouponDiscount(couponDiscount);
-        settlement.setTotalPrice(totalPrice);
-        settlement.setFeeRate(DEFAULT_FEE_RATE);
-        settlement.setStatus(SettlementStatus.READY);
-        if (settlement.getFeeDate() == null) {
-            settlement.setFeeDate(LocalDateTime.now());
-        }
-
-        order.setSettlement(settlement);
+        applySettlementStatusTransition(settlement, payment, dispute, request, currentUser);
         settlementRepository.save(settlement);
-    }
-
-    /**
-     * 레거시 호환용 완료 처리(호출자 권한 검증 없음)
-     */
-    public void completeSettlement(Long orderId) {
-        completeSettlementInternal(orderId, null);
-    }
-
-    /**
-     * 권한 검증 포함 완료 처리
-     */
-    public SettlementResponse completeSettlementByUser(Long orderId, Users currentUser) {
-        return toResponse(completeSettlementInternal(orderId, currentUser));
+        return toResponse(settlement);
     }
 
     @Transactional(readOnly = true)
@@ -152,6 +115,30 @@ public class SettlementService {
     }
 
     @Transactional(readOnly = true)
+    public SettlementStatusSummaryResponse getSettlementStatusSummary() {
+        Object[] row = settlementRepository.getSettlementStatusSummary(SettlementStatus.COMPLETED);
+        if (row == null || row.length < 6) {
+            return SettlementStatusSummaryResponse.builder()
+                    .totalAmount(0L)
+                    .pendingAmount(0L)
+                    .completedAmount(0L)
+                    .totalCount(0L)
+                    .pendingCount(0L)
+                    .completedCount(0L)
+                    .build();
+        }
+
+        return SettlementStatusSummaryResponse.builder()
+                .totalAmount(toLong(row[0]))
+                .pendingAmount(toLong(row[1]))
+                .completedAmount(toLong(row[2]))
+                .totalCount(toLong(row[3]))
+                .pendingCount(toLong(row[4]))
+                .completedCount(toLong(row[5]))
+                .build();
+    }
+
+    @Transactional(readOnly = true)
     public List<SettlementRegionStatResponse> getSettlementRegionStats(LocalDateTime start, LocalDateTime end) {
         return settlementRepository.getSettlementStatsByRegion(start, end).stream()
                 .map(row -> SettlementRegionStatResponse.builder()
@@ -162,26 +149,146 @@ public class SettlementService {
                 .toList();
     }
 
-    private Settlement completeSettlementInternal(Long orderId, Users currentUser) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("order not found. orderId=" + orderId));
+    private void applySettlementStatusTransition(
+            Settlement settlement,
+            TransportPayment payment,
+            PaymentDispute dispute,
+            UpdateSettlementStatusRequest request,
+            Users currentUser
+    ) {
+        SettlementStatus nextStatus = request.getStatus();
+        String adminMemo = normalize(request.getAdminMemo());
 
-        if (currentUser != null) {
-            requireAuthenticated(currentUser);
-            validateOwnerOrAdmin(order, currentUser);
+        if (settlement.getFeeDate() == null) {
+            settlement.setFeeDate(LocalDateTime.now());
+        }
+        settlement.setField5(adminMemo);
+
+        switch (nextStatus) {
+            case READY -> {
+                settlement.setStatus(SettlementStatus.READY);
+                settlement.setFeeCompleteDate(null);
+                releaseSettlementHold(payment, dispute, currentUser, adminMemo);
+            }
+            case WAIT -> {
+                settlement.setStatus(SettlementStatus.WAIT);
+                settlement.setFeeCompleteDate(null);
+                holdSettlement(payment, dispute, currentUser, adminMemo);
+            }
+            case COMPLETED -> {
+                settlement.setStatus(SettlementStatus.COMPLETED);
+                settlement.setFeeCompleteDate(LocalDateTime.now());
+                resolveSettlementForCompletion(payment, dispute, currentUser, adminMemo);
+            }
+        }
+    }
+
+    private void holdSettlement(
+            TransportPayment payment,
+            PaymentDispute dispute,
+            Users currentUser,
+            String adminMemo
+    ) {
+        if (payment == null) {
+            return;
+        }
+        if (payment.getStatus() == TransportPaymentStatus.CANCELLED) {
+            throw new IllegalStateException("cannot hold cancelled payment");
         }
 
-        Settlement settlement = settlementRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalStateException("settlement not found. orderId=" + orderId));
+        payment.updateStatus(TransportPaymentStatus.ADMIN_HOLD);
+        transportPaymentRepository.save(payment);
+        upsertAdminDispute(payment, dispute, currentUser, PaymentDisputeStatus.ADMIN_HOLD, adminMemo);
+    }
 
-        settlement.setStatus(SettlementStatus.COMPLETED);
-        settlement.setFeeCompleteDate(LocalDateTime.now());
-
-        if (!"COMPLETED".equalsIgnoreCase(order.getStatus())) {
-            order.changeStatus("COMPLETED");
+    private void releaseSettlementHold(
+            TransportPayment payment,
+            PaymentDispute dispute,
+            Users currentUser,
+            String adminMemo
+    ) {
+        if (payment == null) {
+            return;
         }
 
-        return settlementRepository.save(settlement);
+        if (isDisputeBackedStatus(payment.getStatus()) || dispute != null) {
+            forceConfirmPayment(payment);
+            transportPaymentRepository.save(payment);
+            upsertAdminDispute(payment, dispute, currentUser, PaymentDisputeStatus.ADMIN_FORCE_CONFIRMED, adminMemo);
+        }
+    }
+
+    private void resolveSettlementForCompletion(
+            TransportPayment payment,
+            PaymentDispute dispute,
+            Users currentUser,
+            String adminMemo
+    ) {
+        if (payment == null) {
+            return;
+        }
+
+        if (isDisputeBackedStatus(payment.getStatus()) || dispute != null) {
+            forceConfirmPayment(payment);
+            transportPaymentRepository.save(payment);
+            upsertAdminDispute(payment, dispute, currentUser, PaymentDisputeStatus.ADMIN_FORCE_CONFIRMED, adminMemo);
+        }
+    }
+
+    private void forceConfirmPayment(TransportPayment payment) {
+        if (payment.getConfirmedAt() == null) {
+            payment.confirm(LocalDateTime.now());
+        }
+        payment.updateStatus(TransportPaymentStatus.ADMIN_FORCE_CONFIRMED);
+    }
+
+    private void upsertAdminDispute(
+            TransportPayment payment,
+            PaymentDispute dispute,
+            Users currentUser,
+            PaymentDisputeStatus nextStatus,
+            String adminMemo
+    ) {
+        if (payment == null || payment.getPaymentId() == null) {
+            return;
+        }
+
+        PaymentDispute target = dispute;
+        if (target == null) {
+            Long requesterUserId = payment.getDriverUserId() != null
+                    ? payment.getDriverUserId()
+                    : currentUser.getUserId();
+            target = PaymentDispute.create(
+                    payment.getOrderId(),
+                    payment.getPaymentId(),
+                    requesterUserId,
+                    currentUser.getUserId(),
+                    PaymentDisputeReason.OTHER,
+                    buildAdminDisputeDescription(nextStatus, adminMemo),
+                    null
+            );
+        }
+        target.updateStatus(nextStatus, adminMemo);
+        paymentDisputeRepository.save(target);
+    }
+
+    private String buildAdminDisputeDescription(
+            PaymentDisputeStatus nextStatus,
+            String adminMemo
+    ) {
+        if (adminMemo != null && !adminMemo.isBlank()) {
+            return adminMemo;
+        }
+        return "ADMIN settlement status update: " + nextStatus.name();
+    }
+
+    private boolean isDisputeBackedStatus(TransportPaymentStatus status) {
+        if (status == null) {
+            return false;
+        }
+        return status == TransportPaymentStatus.DISPUTED
+                || status == TransportPaymentStatus.ADMIN_HOLD
+                || status == TransportPaymentStatus.ADMIN_REJECTED;
     }
 
     private void validateReadPermission(Settlement settlement, Users currentUser) {
@@ -207,25 +314,24 @@ public class SettlementService {
         throw new IllegalStateException("forbidden settlement access");
     }
 
-    private void validateOwnerOrAdmin(Order order, Users currentUser) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return;
-        }
-        Long ownerId = order.getUser() != null ? order.getUser().getUserId() : null;
-        if (currentUser.getRole() == Role.SHIPPER && ownerId != null && ownerId.equals(currentUser.getUserId())) {
-            return;
-        }
-        throw new IllegalStateException("only owner shipper or admin can handle settlement");
-    }
-
     private void requireAuthenticated(Users user) {
         if (user == null || user.getUserId() == null) {
             throw new IllegalStateException("authentication required");
         }
     }
 
-    private long nullSafe(Long value) {
-        return value == null ? 0L : value;
+    private void requireAdmin(Users user) {
+        if (user.getRole() != Role.ADMIN) {
+            throw new IllegalStateException("only admin can update settlement status");
+        }
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private long toLong(Object value) {
@@ -256,7 +362,10 @@ public class SettlementService {
     private SettlementResponse toResponse(Settlement settlement) {
     	// 차주 ID(driverNo) 추출
         Long driverNo = settlement.getOrder() != null ? settlement.getOrder().getDriverNo() : null;
-        
+        TransportPayment transportPayment = settlement.getOrder() == null
+                ? null
+                : transportPaymentRepository.findByOrderId(settlement.getOrder().getOrderId()).orElse(null);
+
         // 2. 차주 이름 조회 로직 추가
         String driverName = "미지정";
         String bankName = null;
@@ -295,6 +404,17 @@ public class SettlementService {
                 .accountNum(accountNum)   // 빌더에 추가
                 .shipperName(shipperName)
                 .bizNumber(bizNumber)
+                .paymentId(transportPayment != null ? transportPayment.getPaymentId() : null)
+                .paymentMethod(transportPayment != null && transportPayment.getMethod() != null ? transportPayment.getMethod().name() : null)
+                .paymentTiming(transportPayment != null && transportPayment.getPaymentTiming() != null ? transportPayment.getPaymentTiming().name() : null)
+                .paymentStatus(transportPayment != null && transportPayment.getStatus() != null ? transportPayment.getStatus().name() : null)
+                .paymentAmount(transportPayment != null ? toLong(transportPayment.getAmount()) : null)
+                .paymentFeeAmount(transportPayment != null ? toLong(transportPayment.getFeeAmountSnapshot()) : null)
+                .paymentNetAmount(transportPayment != null ? toLong(transportPayment.getNetAmountSnapshot()) : null)
+                .pgTid(transportPayment != null ? transportPayment.getPgTid() : null)
+                .proofUrl(transportPayment != null ? transportPayment.getProofUrl() : null)
+                .paidAt(transportPayment != null ? transportPayment.getPaidAt() : null)
+                .confirmedAt(transportPayment != null ? transportPayment.getConfirmedAt() : null)
                 .levelDiscount(settlement.getLevelDiscount())
                 .couponDiscount(settlement.getCouponDiscount())
                 .totalPrice(settlement.getTotalPrice())

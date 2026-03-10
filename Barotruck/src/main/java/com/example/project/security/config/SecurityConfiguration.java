@@ -118,8 +118,9 @@ public class SecurityConfiguration {
 
         CorsConfiguration config = new CorsConfiguration();
 
+        config.setAllowedOriginPatterns(List.of("*"));
         // ⭐ 리액트 주소
-        config.setAllowedOrigins(List.of("http://localhost:3000"));
+        // config.setAllowedOrigins(List.of("http://localhost:3000"));
 
         // 허용 메서드
         config.setAllowedMethods(List.of(

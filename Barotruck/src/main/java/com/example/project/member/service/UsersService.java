@@ -119,7 +119,7 @@ public class UsersService {
 
     // [Create & Update] 프로필 이미지 등록/수정 (하나로 해결)
     @Transactional
-    public void uploadProfileImage(Long userId, MultipartFile file) {
+    public String uploadProfileImage(Long userId, MultipartFile file) {
         Users user = repository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("유저가 없습니다."));
 
@@ -133,6 +133,7 @@ public class UsersService {
 
         // 3. 유저 엔티티 필드 업데이트 (DB 저장)
         user.updateProfileImage(res);
+        return res.getImageUrl();
     }
 
     // [Read] 프로필 이미지 경로 조회
