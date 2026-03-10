@@ -71,8 +71,7 @@ public class PaymentLifecycleService {
                 firstPaymentPromoEligible
         );
 
-        TransportPayment transportPayment = transportPaymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalStateException("transport payment not initialized. orderId=" + orderId));
+        TransportPayment transportPayment = requireInitializedPayment(orderId);
         PaymentMethod effectiveMethod = resolveManualPaymentMethod(method, transportPayment);
         validateManualPaymentProof(effectiveMethod, proofUrl);
         transportPayment.applyPricingSnapshots(
@@ -165,8 +164,7 @@ public class PaymentLifecycleService {
                 firstPaymentPromoEligible
         );
 
-        TransportPayment payment = transportPaymentRepository.findByOrderId(tx.getOrderId())
-                .orElseThrow(() -> new IllegalStateException("transport payment not initialized. orderId=" + tx.getOrderId()));
+        TransportPayment payment = requireInitializedPayment(tx.getOrderId());
 
         payment.applyPaymentTiming(resolveGatewayPaymentTiming(tx));
         payment.applyPricingSnapshots(
@@ -252,6 +250,20 @@ public class PaymentLifecycleService {
         );
 
         return transportPaymentRepository.save(readyPayment);
+    }
+
+    @Transactional
+    public TransportPayment requireInitializedPayment(Long orderId) {
+        TransportPayment payment = transportPaymentRepository.findByOrderId(orderId).orElse(null);
+        if (payment != null) {
+            return payment;
+        }
+
+        TransportPayment initialized = ensureReadyPaymentRecord(orderId);
+        if (initialized == null) {
+            throw new IllegalStateException("transport payment could not be initialized. unsupported payMethod. orderId=" + orderId);
+        }
+        return initialized;
     }
 
     private void upsertSettlementOnPaid(Long orderId, Long shipperUserId, BigDecimal grossAmount, FeePolicyService.FeeResult fee) {

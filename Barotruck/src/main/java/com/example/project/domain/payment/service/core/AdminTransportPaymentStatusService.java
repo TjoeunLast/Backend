@@ -142,16 +142,7 @@ public class AdminTransportPaymentStatusService {
     }
 
     private TransportPayment ensurePayment(Long orderId) {
-        TransportPayment payment = transportPaymentRepository.findByOrderId(orderId).orElse(null);
-        if (payment != null) {
-            return payment;
-        }
-
-        TransportPayment initialized = paymentLifecycleService.ensureReadyPaymentRecord(orderId);
-        if (initialized == null) {
-            throw new IllegalStateException("transport payment could not be initialized. orderId=" + orderId);
-        }
-        return initialized;
+        return paymentLifecycleService.requireInitializedPayment(orderId);
     }
 
     private Settlement ensureSettlement(Long orderId, TransportPayment payment) {
