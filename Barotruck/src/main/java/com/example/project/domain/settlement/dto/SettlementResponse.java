@@ -16,6 +16,7 @@ public record SettlementResponse(
         String accountNum,  // ★ 차주 계좌번호
         String shipperName,   // 화주 회사명 또는 이름
         String bizNumber,      // 사업자 등록번호
+        String orderStatus,
         Long paymentId,
         String paymentMethod,
         String paymentTiming,
@@ -32,6 +33,11 @@ public record SettlementResponse(
         Long totalPrice,
         Long feeRate,
         String status,
+        String payoutStatus,
+        String payoutFailureReason,
+        String payoutRef,
+        LocalDateTime payoutRequestedAt,
+        LocalDateTime payoutCompletedAt,
         LocalDateTime feeDate,
         LocalDateTime feeCompleteDate
 ) {
@@ -54,6 +60,7 @@ public record SettlementResponse(
                 .accountNum(accountNum)
                 .shipperName(shipperName)
                 .bizNumber(bizRegNum)
+                .orderStatus(settlement.getOrder() != null ? settlement.getOrder().getStatus() : null)
                 .paymentId(null)
                 .paymentMethod(null)
                 .paymentTiming(null)
@@ -70,6 +77,11 @@ public record SettlementResponse(
                 .totalPrice(settlement.getTotalPrice())
                 .feeRate(settlement.getFeeRate())
                 .status(settlement.getStatus() == null ? null : settlement.getStatus().name())
+                .payoutStatus(null)
+                .payoutFailureReason(null)
+                .payoutRef(null)
+                .payoutRequestedAt(null)
+                .payoutCompletedAt(null)
                 .feeDate(settlement.getFeeDate())
                 .feeCompleteDate(settlement.getFeeCompleteDate())
                 .build();
