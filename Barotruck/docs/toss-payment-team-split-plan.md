@@ -7,6 +7,7 @@
 현재 남은 미비점과 문서 불일치 정리:
 
 - `docs/toss-payment-gap-review.md`
+- 테스트 앱 단계/분업 계획: `docs/toss-payment-test-app-plan.md`
 
 ---
 
