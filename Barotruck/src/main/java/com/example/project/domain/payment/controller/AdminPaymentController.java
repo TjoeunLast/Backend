@@ -1,12 +1,15 @@
 package com.example.project.domain.payment.controller;
 
 import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisputeRequest;
+import com.example.project.domain.payment.dto.paymentRequest.CancelTossPaymentRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdateFeePolicyRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdateLevelFeeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdatePaymentDisputeStatusRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdateTransportPaymentStatusRequest;
 import com.example.project.domain.payment.dto.paymentResponse.DriverPayoutBatchStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.DriverPayoutItemStatusResponse;
+import com.example.project.domain.payment.dto.paymentResponse.AdminBillingAgreementStatusResponse;
+import com.example.project.domain.payment.dto.paymentResponse.FeeAutoChargeAttemptListResponse;
 import com.example.project.domain.payment.dto.paymentResponse.FeePolicyResponse;
 import com.example.project.domain.payment.dto.paymentResponse.FeeInvoiceStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.GatewayTransactionStatusResponse;
@@ -15,6 +18,8 @@ import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeResp
 import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.PaymentReconciliationStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.PaymentRetryQueueStatusResponse;
+import com.example.project.domain.payment.dto.paymentResponse.TossPaymentComparisonResponse;
+import com.example.project.domain.payment.dto.paymentResponse.TossPaymentLookupResponse;
 import com.example.project.domain.payment.dto.paymentResponse.TransportPaymentResponse;
 import com.example.project.domain.payment.service.core.DriverPayoutService;
 import com.example.project.domain.payment.service.core.FeeInvoiceBatchService;
@@ -22,6 +27,7 @@ import com.example.project.domain.payment.service.core.FeePolicyService;
 import com.example.project.domain.payment.service.core.FeeInvoiceService;
 import com.example.project.domain.payment.service.core.PaymentReconciliationService;
 import com.example.project.domain.payment.service.core.PaymentRetryQueueService;
+import com.example.project.domain.payment.service.core.TossPaymentOpsService;
 import com.example.project.domain.payment.service.core.TransportPaymentService;
 import com.example.project.domain.payment.service.query.AdminPaymentStatusQueryService;
 import com.example.project.global.api.ApiResponse;
@@ -32,12 +38,14 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/admin/payment")
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminPaymentController {
     private final TransportPaymentService transportPaymentService;
     private final FeeInvoiceBatchService feeInvoiceBatchService;
@@ -47,6 +55,7 @@ public class AdminPaymentController {
     private final PaymentReconciliationService paymentReconciliationService;
     private final PaymentRetryQueueService paymentRetryQueueService;
     private final AdminPaymentStatusQueryService adminPaymentStatusQueryService;
+    private final TossPaymentOpsService tossPaymentOpsService;
 
     // 관리자/배치용 (MVP)
     @PatchMapping("/orders/{orderId}/status")
@@ -113,6 +122,26 @@ public class AdminPaymentController {
         return ApiResponse.ok(adminPaymentStatusQueryService.getFeeInvoiceStatus(shipperUserId, period));
     }
 
+    @GetMapping("/billing-agreements/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<AdminBillingAgreementStatusResponse> getBillingAgreementStatus(
+            @RequestParam("shipperUserId") Long shipperUserId
+    ) {
+        return ApiResponse.ok(adminPaymentStatusQueryService.getBillingAgreementStatus(shipperUserId));
+    }
+
+    @GetMapping("/fee-auto-charge-attempts")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<FeeAutoChargeAttemptListResponse> getFeeAutoChargeAttempts(
+            @RequestParam(value = "shipperUserId", required = false) Long shipperUserId,
+            @RequestParam(value = "invoiceId", required = false) Long invoiceId,
+            @RequestParam(value = "limit", required = false) Integer limit
+    ) {
+        return ApiResponse.ok(
+                adminPaymentStatusQueryService.getFeeAutoChargeAttempts(shipperUserId, invoiceId, limit)
+        );
+    }
+
     @PostMapping("/payouts/run")
     public ApiResponse<?> runPayoutBatch(@RequestParam("date") String date) {
         return ApiResponse.ok(driverPayoutService.runPayoutForDate(LocalDate.parse(date)));
@@ -126,9 +155,29 @@ public class AdminPaymentController {
         return ApiResponse.ok(adminPaymentStatusQueryService.getPayoutBatchStatus(LocalDate.parse(date)));
     }
 
+    @PostMapping("/orders/{orderId}/payouts/request")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<DriverPayoutItemStatusResponse> requestPayoutForOrder(
+            @PathVariable("orderId") Long orderId
+    ) {
+        validatePositiveId(orderId, "orderId");
+        driverPayoutService.requestPayoutForOrder(orderId);
+        return ApiResponse.ok(adminPaymentStatusQueryService.getPayoutItemStatusByOrderId(orderId));
+    }
+
     @PostMapping("/payout-items/{itemId}/retry")
     public ApiResponse<?> retryPayoutItem(@PathVariable("itemId") Long itemId) {
         return ApiResponse.ok(driverPayoutService.retryItem(itemId));
+    }
+
+    @PostMapping("/payout-items/orders/{orderId}/sync")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<DriverPayoutItemStatusResponse> syncPayoutItemStatus(
+            @PathVariable("orderId") Long orderId
+    ) {
+        validatePositiveId(orderId, "orderId");
+        driverPayoutService.syncPayoutStatusByOrderId(orderId);
+        return ApiResponse.ok(adminPaymentStatusQueryService.getPayoutItemStatusByOrderId(orderId));
     }
 
     @GetMapping("/payout-items/orders/{orderId}/status")
@@ -167,6 +216,42 @@ public class AdminPaymentController {
             @PathVariable("orderId") Long orderId
     ) {
         return ApiResponse.ok(adminPaymentStatusQueryService.getTossOrderStatus(orderId));
+    }
+
+    @GetMapping("/toss/payments/{paymentKey}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<TossPaymentLookupResponse> lookupTossPaymentByPaymentKey(
+            @PathVariable("paymentKey") String paymentKey
+    ) {
+        String normalizedPaymentKey = normalize(paymentKey);
+        if (normalizedPaymentKey == null) {
+            throw new IllegalArgumentException("paymentKey is required");
+        }
+        if (normalizedPaymentKey.length() > 200) {
+            throw new IllegalArgumentException("paymentKey must be 200 characters or fewer");
+        }
+        return ApiResponse.ok(tossPaymentOpsService.lookupByPaymentKey(normalizedPaymentKey));
+    }
+
+    @GetMapping("/toss/orders/{orderId}/lookup")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<TossPaymentComparisonResponse> lookupTossPaymentByOrderId(
+            @PathVariable("orderId") Long orderId
+    ) {
+        validatePositiveId(orderId, "orderId");
+        return ApiResponse.ok(tossPaymentOpsService.lookupByOrderId(orderId));
+    }
+
+    @PostMapping("/orders/{orderId}/cancel")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<TransportPaymentResponse> cancelTossOrderPayment(
+            @PathVariable("orderId") Long orderId,
+            @RequestBody(required = false) CancelTossPaymentRequest request
+    ) {
+        validatePositiveId(orderId, "orderId");
+        validateCancelRequest(request);
+        var payment = tossPaymentOpsService.cancelOrderPayment(orderId, request);
+        return ApiResponse.ok(TransportPaymentResponse.from(payment));
     }
 
     @PostMapping("/reconciliation/run")
@@ -217,4 +302,37 @@ public class AdminPaymentController {
         return ApiResponse.ok(feePolicyService.updateLevelPolicy(request));
     }
 
+    private void validatePositiveId(Long value, String fieldName) {
+        if (value == null || value <= 0) {
+            throw new IllegalArgumentException(fieldName + " must be a positive number");
+        }
+    }
+
+    private void validateCancelRequest(CancelTossPaymentRequest request) {
+        if (request == null) {
+            return;
+        }
+
+        request.setCancelReason(normalize(request.getCancelReason()));
+
+        if (request.getCancelReason() != null && request.getCancelReason().length() > 1000) {
+            throw new IllegalArgumentException("cancelReason must be 1000 characters or fewer");
+        }
+
+        BigDecimal cancelAmount = request.getCancelAmount();
+        if (cancelAmount != null && cancelAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("cancelAmount must be greater than 0");
+        }
+        if (cancelAmount != null && cancelAmount.scale() > 2) {
+            throw new IllegalArgumentException("cancelAmount must have at most 2 decimal places");
+        }
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 }

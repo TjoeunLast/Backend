@@ -6,11 +6,10 @@ import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PayoutStatus;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
+import com.example.project.domain.payment.repository.DriverPayoutBatchRepository;
 import com.example.project.domain.payment.repository.DriverPayoutItemRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.payment.service.client.DriverPayoutGatewayClient;
-import com.example.project.domain.settlement.domain.SettlementStatus;
-import com.example.project.domain.settlement.repository.SettlementRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,11 +26,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DriverPayoutService {
 
+    private final DriverPayoutBatchRepository batchRepository;
     private final DriverPayoutItemRepository itemRepository;
     private final TransportPaymentRepository transportPaymentRepository;
     private final DriverPayoutGatewayClient payoutGatewayClient;
-    private final SettlementRepository settlementRepository;
     private final EntityManager entityManager;
+    private final TossPayoutWebhookService tossPayoutWebhookService;
 
     @Scheduled(cron = "${payment.payout.cron:0 0 4 * * *}")
     @Transactional
@@ -56,26 +56,23 @@ public class DriverPayoutService {
             }
 
             if (result.completed()) {
-                item.markCompleted(item.getPayoutRef());
-                markSettlementCompletedOnPayout(item.getOrderId());
+                tossPayoutWebhookService.syncPayoutCompleted(item, item.getPayoutRef(), "POLLING");
             } else if (result.failed()) {
-                item.markFailed(defaultFailureReason(result.failReason(), result.gatewayStatus()), false);
+                tossPayoutWebhookService.syncPayoutFailed(
+                        item,
+                        defaultFailureReason(result.failReason(), result.gatewayStatus()),
+                        false,
+                        "POLLING"
+                );
             } else {
                 continue;
             }
-
-            itemRepository.save(item);
-            refreshBatchStatus(item.getBatch());
         }
     }
 
     @Transactional
     public DriverPayoutBatch runPayoutForDate(LocalDate payoutDate) {
-        DriverPayoutBatch batch = findBatchByDate(payoutDate);
-        if (batch == null) {
-            batch = DriverPayoutBatch.start(payoutDate);
-            entityManager.persist(batch);
-        }
+        DriverPayoutBatch batch = findOrCreateBatch(payoutDate);
 
         List<TransportPayment> payments = transportPaymentRepository.findAllByStatusIn(List.of(
                 TransportPaymentStatus.CONFIRMED,
@@ -98,8 +95,41 @@ public class DriverPayoutService {
             );
             processItem(item);
         }
-        refreshBatchStatus(batch);
+        tossPayoutWebhookService.refreshBatchStatus(batch);
         return batch;
+    }
+
+    @Transactional
+    public DriverPayoutItem requestPayoutForOrder(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            throw new IllegalArgumentException("orderId must be a positive number");
+        }
+
+        TransportPayment payment = transportPaymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("transport payment not found. orderId=" + orderId));
+        validateManualPayoutEligibility(payment);
+
+        DriverPayoutItem existingItem = itemRepository.findByOrderId(orderId).orElse(null);
+        if (existingItem != null) {
+            return reprocessExistingItem(existingItem);
+        }
+
+        DriverPayoutBatch batch = findOrCreateBatch(LocalDate.now());
+        DriverPayoutItem item = itemRepository.save(
+                DriverPayoutItem.ready(batch, payment.getOrderId(), payment.getDriverUserId(), payment.getNetAmountSnapshot())
+        );
+        return processItem(item);
+    }
+
+    @Transactional
+    public DriverPayoutItem syncPayoutStatusByOrderId(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            throw new IllegalArgumentException("orderId must be a positive number");
+        }
+
+        DriverPayoutItem item = itemRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("payout item not found. orderId=" + orderId));
+        return syncExistingItem(item, "MANUAL_SYNC");
     }
 
     @Transactional
@@ -127,11 +157,10 @@ public class DriverPayoutService {
         );
         if (result.success()) {
             if (result.completed()) {
-                item.markCompleted(result.payoutRef());
-                markSettlementCompletedOnPayout(item.getOrderId());
+                tossPayoutWebhookService.syncPayoutCompleted(item, result.payoutRef(), "REQUEST");
                 log.info("driver payout completed. orderId={}, itemId={}", item.getOrderId(), item.getItemId());
             } else {
-                item.markAccepted(result.payoutRef());
+                tossPayoutWebhookService.syncPayoutAccepted(item, result.payoutRef(), "REQUEST");
                 log.info(
                         "driver payout requested. orderId={}, itemId={}, payoutRef={}, status={}",
                         item.getOrderId(),
@@ -141,24 +170,82 @@ public class DriverPayoutService {
                 );
             }
         } else {
-            item.markFailed(result.failReason());
+            tossPayoutWebhookService.syncPayoutFailed(item, result.failReason(), true, "REQUEST");
             log.warn("driver payout failed. orderId={}, itemId={}, reason={}",
                     item.getOrderId(), item.getItemId(), result.failReason());
         }
-        DriverPayoutItem savedItem = itemRepository.save(item);
-        refreshBatchStatus(item.getBatch());
-        return savedItem;
+        return item;
     }
 
-    private DriverPayoutBatch findBatchByDate(LocalDate payoutDate) {
-        var result = entityManager.createQuery(
-                        "select b from DriverPayoutBatch b where b.batchDate = :batchDate",
-                        DriverPayoutBatch.class
-                )
-                .setParameter("batchDate", payoutDate)
-                .setMaxResults(1)
-                .getResultList();
-        return result.isEmpty() ? null : result.get(0);
+    private DriverPayoutItem reprocessExistingItem(DriverPayoutItem item) {
+        if (item.getStatus() == PayoutStatus.COMPLETED) {
+            return item;
+        }
+        if (item.getStatus() == PayoutStatus.REQUESTED && item.getPayoutRef() != null && !item.getPayoutRef().isBlank()) {
+            return syncExistingItem(item, "RECHECK");
+        }
+        if (item.getStatus() == PayoutStatus.READY || item.getStatus() == PayoutStatus.FAILED) {
+            if (item.getStatus() == PayoutStatus.FAILED) {
+                item.markRetrying();
+                itemRepository.save(item);
+            }
+            return processItem(item);
+        }
+        if (item.getStatus() == PayoutStatus.RETRYING) {
+            return processItem(item);
+        }
+        return item;
+    }
+
+    private DriverPayoutItem syncExistingItem(DriverPayoutItem item, String source) {
+        if (item.getStatus() == PayoutStatus.COMPLETED) {
+            return item;
+        }
+        if (item.getPayoutRef() == null || item.getPayoutRef().isBlank()) {
+            return item;
+        }
+
+        var result = payoutGatewayClient.getPayoutStatus(item.getPayoutRef());
+        if (!result.success()) {
+            throw new IllegalStateException(defaultFailureReason(result.failReason(), result.gatewayStatus()));
+        }
+
+        if (result.completed()) {
+            tossPayoutWebhookService.syncPayoutCompleted(item, item.getPayoutRef(), source);
+        } else if (result.failed()) {
+            tossPayoutWebhookService.syncPayoutFailed(
+                    item,
+                    defaultFailureReason(result.failReason(), result.gatewayStatus()),
+                    false,
+                    source
+            );
+        } else {
+            tossPayoutWebhookService.syncPayoutAccepted(item, item.getPayoutRef(), source);
+        }
+
+        entityManager.flush();
+        return itemRepository.findById(item.getItemId()).orElse(item);
+    }
+
+    private DriverPayoutBatch findOrCreateBatch(LocalDate payoutDate) {
+        return batchRepository.findByBatchDate(payoutDate)
+                .orElseGet(() -> batchRepository.save(DriverPayoutBatch.start(payoutDate)));
+    }
+
+    private void validateManualPayoutEligibility(TransportPayment payment) {
+        if (payment.getDriverUserId() == null) {
+            throw new IllegalStateException("driver user not found for payout request");
+        }
+        if (payment.getConfirmedAt() == null) {
+            throw new IllegalStateException("transport payment is not confirmed yet");
+        }
+        if (payment.getStatus() != TransportPaymentStatus.CONFIRMED
+                && payment.getStatus() != TransportPaymentStatus.ADMIN_FORCE_CONFIRMED) {
+            throw new IllegalStateException("only confirmed transport payment can request payout");
+        }
+        if (!isPayoutEligible(payment)) {
+            throw new IllegalStateException("payment method is not eligible for payout request");
+        }
     }
 
     private boolean isPayoutEligible(TransportPayment payment) {
@@ -169,42 +256,6 @@ public class DriverPayoutService {
             }
         }
         return true;
-    }
-
-    private void refreshBatchStatus(DriverPayoutBatch batch) {
-        if (batch == null || batch.getBatchId() == null) {
-            return;
-        }
-
-        long totalCount = itemRepository.countByBatch_BatchId(batch.getBatchId());
-        long requestedCount = itemRepository.countByBatch_BatchIdAndStatus(batch.getBatchId(), PayoutStatus.REQUESTED);
-        long failedCount = itemRepository.countByBatch_BatchIdAndStatus(batch.getBatchId(), PayoutStatus.FAILED);
-
-        if (totalCount == 0) {
-            batch.markCompleted();
-            return;
-        }
-
-        if (requestedCount > 0) {
-            return;
-        }
-
-        if (failedCount > 0) {
-            batch.markFailed("failed items: " + failedCount);
-            return;
-        }
-
-        batch.markCompleted();
-    }
-
-    private void markSettlementCompletedOnPayout(Long orderId) {
-        settlementRepository.findByOrderId(orderId).ifPresentOrElse(settlement -> {
-            settlement.setStatus(SettlementStatus.COMPLETED);
-            if (settlement.getFeeCompleteDate() == null) {
-                settlement.setFeeCompleteDate(LocalDateTime.now());
-            }
-            settlementRepository.save(settlement);
-        }, () -> log.warn("payout completed but settlement not found. orderId={}", orderId));
     }
 
     private String defaultFailureReason(String failReason, String gatewayStatus) {
