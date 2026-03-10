@@ -36,7 +36,37 @@ public class DriverPayoutService {
     @Scheduled(cron = "${payment.payout.cron:0 0 4 * * *}")
     @Transactional
     public void scheduleDailyPayout() {
+        syncRequestedPayouts();
         runPayoutForDate(LocalDate.now());
+    }
+
+    @Scheduled(cron = "${payment.payout.sync-cron:0 */15 * * * *}")
+    @Transactional
+    public void syncRequestedPayouts() {
+        List<DriverPayoutItem> requestedItems = itemRepository.findAllByStatusIn(List.of(PayoutStatus.REQUESTED));
+        for (DriverPayoutItem item : requestedItems) {
+            if (item.getStatus() != PayoutStatus.REQUESTED || item.getPayoutRef() == null || item.getPayoutRef().isBlank()) {
+                continue;
+            }
+
+            var result = payoutGatewayClient.getPayoutStatus(item.getPayoutRef());
+            if (!result.success()) {
+                log.debug("skip payout status sync. itemId={}, reason={}", item.getItemId(), result.failReason());
+                continue;
+            }
+
+            if (result.completed()) {
+                item.markCompleted(item.getPayoutRef());
+                markSettlementCompletedOnPayout(item.getOrderId());
+            } else if (result.failed()) {
+                item.markFailed(defaultFailureReason(result.failReason(), result.gatewayStatus()), false);
+            } else {
+                continue;
+            }
+
+            itemRepository.save(item);
+            refreshBatchStatus(item.getBatch());
+        }
     }
 
     @Transactional
@@ -68,13 +98,7 @@ public class DriverPayoutService {
             );
             processItem(item);
         }
-
-        long failedCount = itemRepository.countByBatch_BatchIdAndStatus(batch.getBatchId(), PayoutStatus.FAILED);
-        if (failedCount == 0) {
-            batch.markCompleted();
-        } else {
-            batch.markFailed("failed items: " + failedCount);
-        }
+        refreshBatchStatus(batch);
         return batch;
     }
 
@@ -102,15 +126,28 @@ public class DriverPayoutService {
                 item.getItemId()
         );
         if (result.success()) {
-            item.markCompleted(result.payoutRef());
-            markSettlementCompletedOnPayout(item.getOrderId());
-            log.info("driver payout completed. orderId={}, itemId={}", item.getOrderId(), item.getItemId());
+            if (result.completed()) {
+                item.markCompleted(result.payoutRef());
+                markSettlementCompletedOnPayout(item.getOrderId());
+                log.info("driver payout completed. orderId={}, itemId={}", item.getOrderId(), item.getItemId());
+            } else {
+                item.markAccepted(result.payoutRef());
+                log.info(
+                        "driver payout requested. orderId={}, itemId={}, payoutRef={}, status={}",
+                        item.getOrderId(),
+                        item.getItemId(),
+                        result.payoutRef(),
+                        result.gatewayStatus()
+                );
+            }
         } else {
             item.markFailed(result.failReason());
             log.warn("driver payout failed. orderId={}, itemId={}, reason={}",
                     item.getOrderId(), item.getItemId(), result.failReason());
         }
-        return itemRepository.save(item);
+        DriverPayoutItem savedItem = itemRepository.save(item);
+        refreshBatchStatus(item.getBatch());
+        return savedItem;
     }
 
     private DriverPayoutBatch findBatchByDate(LocalDate payoutDate) {
@@ -134,6 +171,32 @@ public class DriverPayoutService {
         return true;
     }
 
+    private void refreshBatchStatus(DriverPayoutBatch batch) {
+        if (batch == null || batch.getBatchId() == null) {
+            return;
+        }
+
+        long totalCount = itemRepository.countByBatch_BatchId(batch.getBatchId());
+        long requestedCount = itemRepository.countByBatch_BatchIdAndStatus(batch.getBatchId(), PayoutStatus.REQUESTED);
+        long failedCount = itemRepository.countByBatch_BatchIdAndStatus(batch.getBatchId(), PayoutStatus.FAILED);
+
+        if (totalCount == 0) {
+            batch.markCompleted();
+            return;
+        }
+
+        if (requestedCount > 0) {
+            return;
+        }
+
+        if (failedCount > 0) {
+            batch.markFailed("failed items: " + failedCount);
+            return;
+        }
+
+        batch.markCompleted();
+    }
+
     private void markSettlementCompletedOnPayout(Long orderId) {
         settlementRepository.findByOrderId(orderId).ifPresentOrElse(settlement -> {
             settlement.setStatus(SettlementStatus.COMPLETED);
@@ -142,6 +205,16 @@ public class DriverPayoutService {
             }
             settlementRepository.save(settlement);
         }, () -> log.warn("payout completed but settlement not found. orderId={}", orderId));
+    }
+
+    private String defaultFailureReason(String failReason, String gatewayStatus) {
+        if (failReason != null && !failReason.isBlank()) {
+            return failReason;
+        }
+        if (gatewayStatus != null && !gatewayStatus.isBlank()) {
+            return "gateway status=" + gatewayStatus;
+        }
+        return "unknown payout failure";
     }
 }
 

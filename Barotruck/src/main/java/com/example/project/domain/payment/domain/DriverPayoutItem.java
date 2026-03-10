@@ -101,6 +101,16 @@ public class DriverPayoutItem {
     public void markRequested() {
         this.status = PayoutStatus.REQUESTED;
         this.requestedAt = LocalDateTime.now();
+        this.failureReason = null;
+    }
+
+    public void markAccepted(String payoutRef) {
+        this.status = PayoutStatus.REQUESTED;
+        if (this.requestedAt == null) {
+            this.requestedAt = LocalDateTime.now();
+        }
+        this.failureReason = null;
+        this.payoutRef = payoutRef;
     }
 
     // 지급 완료 상태로 변경
@@ -113,9 +123,15 @@ public class DriverPayoutItem {
 
     // 지급 실패 상태로 변경
     public void markFailed(String reason) {
+        markFailed(reason, true);
+    }
+
+    public void markFailed(String reason, boolean incrementRetryCount) {
         this.status = PayoutStatus.FAILED;
         this.failureReason = reason;
-        this.retryCount = this.retryCount + 1;
+        if (incrementRetryCount) {
+            this.retryCount = this.retryCount + 1;
+        }
     }
 
     // 재시도 상태로 변경
