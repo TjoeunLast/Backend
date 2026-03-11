@@ -43,6 +43,12 @@ public class AdminOrderController {
         return ResponseEntity.ok(orderService.getAllOrdersForAdmin(pageable));
     }
 
+    @GetMapping("/active")
+    public ResponseEntity<Page<OrderResponse>> getActiveOrders(
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(orderService.getActiveOrdersForAdmin(pageable));
+    }
+
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderResponse> getOrderDetail(
             @PathVariable("orderId") Long orderId,

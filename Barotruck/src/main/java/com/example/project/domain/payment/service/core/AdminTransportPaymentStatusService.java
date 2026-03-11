@@ -4,6 +4,7 @@ import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.order.repository.OrderRepository;
 import com.example.project.domain.payment.domain.PaymentDispute;
 import com.example.project.domain.payment.domain.TransportPayment;
+import com.example.project.domain.payment.domain.TransportPaymentPricingSnapshot;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeReason;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeStatus;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
@@ -54,6 +55,7 @@ public class AdminTransportPaymentStatusService {
         PaymentDispute dispute = paymentDisputeRepository.findByOrderId(orderId).orElse(null);
 
         applyPaymentMetadata(payment, request);
+        refreshPricingForStatus(orderId, payment, request.getStatus());
         String adminMemo = normalize(request.getAdminMemo());
         if (settlement.getFeeDate() == null) {
             settlement.setFeeDate(LocalDateTime.now());
@@ -155,13 +157,14 @@ public class AdminTransportPaymentStatusService {
     private Settlement ensureSettlement(Long orderId, TransportPayment payment) {
         Settlement settlement = settlementRepository.findByOrderId(orderId).orElse(null);
         if (settlement != null) {
+            syncSettlementSnapshots(settlement, payment);
             return settlement;
         }
 
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("order not found. orderId=" + orderId));
 
-        return Settlement.builder()
+        Settlement created = Settlement.builder()
                 .order(order)
                 .user(order.getUser())
                 .levelDiscount(0L)
@@ -171,6 +174,8 @@ public class AdminTransportPaymentStatusService {
                 .status(SettlementStatus.READY)
                 .feeDate(LocalDateTime.now())
                 .build();
+        syncSettlementSnapshots(created, payment);
+        return created;
     }
 
     private void applyPaymentMetadata(
@@ -253,12 +258,18 @@ public class AdminTransportPaymentStatusService {
         if (settlement.getCouponDiscount() == null) {
             settlement.setCouponDiscount(0L);
         }
-        if (payment.getAmount() != null) {
-            settlement.setTotalPrice(toLong(payment.getAmount()));
+        settlement.applyPricingSnapshot(TransportPaymentPricingSnapshot.from(payment));
+    }
+
+    private void refreshPricingForStatus(
+            Long orderId,
+            TransportPayment payment,
+            TransportPaymentStatus nextStatus
+    ) {
+        if (nextStatus == TransportPaymentStatus.READY || nextStatus == TransportPaymentStatus.CANCELLED) {
+            return;
         }
-        if (payment.getFeeRateSnapshot() != null) {
-            settlement.setFeeRate(toPercentage(payment.getFeeRateSnapshot()));
-        }
+        payment.applyPricingSnapshot(TransportPaymentPricingSnapshot.from(payment));
     }
 
     private boolean shouldTriggerAutoPayout(TransportPaymentStatus status) {

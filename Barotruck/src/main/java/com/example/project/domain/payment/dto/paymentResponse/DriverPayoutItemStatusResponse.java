@@ -2,6 +2,7 @@ package com.example.project.domain.payment.dto.paymentResponse;
 
 import com.example.project.domain.payment.domain.DriverPayoutItem;
 import com.example.project.domain.payment.domain.PaymentGatewayWebhookEvent;
+import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PayoutStatus;
 import com.example.project.member.domain.Driver;
 import lombok.Builder;
@@ -30,14 +31,16 @@ public record DriverPayoutItemStatusResponse(
         String webhookStatus,
         LocalDateTime lastWebhookReceivedAt,
         LocalDateTime lastWebhookProcessedAt,
-        Boolean webhookMatchesPayoutStatus
+        Boolean webhookMatchesPayoutStatus,
+        PaymentAmountSnapshotResponse amountSnapshot
 ) {
     public static DriverPayoutItemStatusResponse from(DriverPayoutItem item) {
-        return from(item, null, null, null, null);
+        return from(item, null, null, null, null, null);
     }
 
     public static DriverPayoutItemStatusResponse from(
             DriverPayoutItem item,
+            TransportPayment payment,
             Driver driver,
             PaymentGatewayWebhookEvent latestWebhookEvent,
             String webhookStatus,
@@ -73,6 +76,7 @@ public record DriverPayoutItemStatusResponse(
                         latestWebhookEvent == null ? null : latestWebhookEvent.getProcessedAt()
                 )
                 .webhookMatchesPayoutStatus(webhookMatchesPayoutStatus)
+                .amountSnapshot(PaymentAmountSnapshotResponse.merge(payment, null, item))
                 .build();
     }
 }

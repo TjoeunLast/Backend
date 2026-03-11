@@ -5,10 +5,12 @@ import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentTiming;
 import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisputeRequest;
+import com.example.project.domain.payment.dto.paymentRequest.FeePreviewRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossConfirmRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossPrepareRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdateTransportPaymentStatusRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdatePaymentDisputeStatusRequest;
+import com.example.project.domain.payment.dto.paymentResponse.FeeBreakdownPreviewResponse;
 import com.example.project.domain.payment.dto.paymentResponse.TossPrepareResponse;
 import com.example.project.global.toss.service.TossPaymentService;
 import com.example.project.member.domain.Users;
@@ -25,6 +27,7 @@ public class TransportPaymentService {
     private final PaymentDisputeService paymentDisputeService;
     private final AdminTransportPaymentStatusService adminTransportPaymentStatusService;
     private final TossPaymentService tossPaymentService;
+    private final PaymentFeePreviewService paymentFeePreviewService;
 
     public TransportPayment markPaid(
             Users currentUser,
@@ -43,6 +46,10 @@ public class TransportPaymentService {
 
     public TransportPayment ensureReadyPaymentRecord(Long orderId) {
         return paymentLifecycleService.ensureReadyPaymentRecord(orderId);
+    }
+
+    public FeeBreakdownPreviewResponse previewFee(Users currentUser, FeePreviewRequest request) {
+        return paymentFeePreviewService.preview(currentUser, request);
     }
 
     public PaymentDispute createDispute(

@@ -14,7 +14,11 @@ public interface TransportPaymentRepository extends JpaRepository<TransportPayme
 
     Optional<TransportPayment> findByOrderId(Long orderId);
 
+    List<TransportPayment> findAllByOrderIdIn(List<Long> orderIds);
+
     long countByShipperUserIdAndStatusIn(Long shipperUserId, List<TransportPaymentStatus> statuses);
+
+    boolean existsByShipperUserIdAndFirstPaymentPromoAppliedTrueAndOrderIdNot(Long shipperUserId, Long orderId);
 
     List<TransportPayment> findAllByStatusIn(List<TransportPaymentStatus> statuses);
 

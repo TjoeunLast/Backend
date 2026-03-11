@@ -1,6 +1,7 @@
 package com.example.project.domain.settlement.service;
 
 import com.example.project.domain.payment.domain.PaymentDispute;
+import com.example.project.domain.payment.domain.TransportPaymentPricingSnapshot;
 import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.DriverPayoutItem;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeReason;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -379,6 +381,7 @@ public class SettlementService {
         TransportPayment transportPayment = settlement.getOrder() == null
                 ? null
                 : transportPaymentRepository.findByOrderId(settlement.getOrder().getOrderId()).orElse(null);
+        TransportPaymentPricingSnapshot pricingSnapshot = TransportPaymentPricingSnapshot.from(transportPayment);
         DriverPayoutItem payoutItem = settlement.getOrder() == null
                 ? null
                 : driverPayoutItemRepository.findByOrderId(settlement.getOrder().getOrderId()).orElse(null);
@@ -410,6 +413,71 @@ public class SettlementService {
             shipperName = shipperUser.getShipper().getCompanyName(); 
             bizNumber = shipperUser.getShipper().getBizRegNum();
         }
+
+        Long baseAmount = firstNonNull(
+                settlement.getBaseAmountSnapshot(),
+                pricingSnapshot != null ? toLong(pricingSnapshot.baseAmount()) : null
+        );
+        BigDecimal shipperFeeRate = firstNonNull(
+                settlement.getShipperFeeRateSnapshot(),
+                pricingSnapshot != null ? pricingSnapshot.shipperFeeRate() : null
+        );
+        Long shipperFeeAmount = firstNonNull(
+                settlement.getShipperFeeAmountSnapshot(),
+                pricingSnapshot != null ? toLong(pricingSnapshot.shipperFeeAmount()) : null
+        );
+        Boolean shipperPromoApplied = firstNonNull(
+                settlement.getShipperPromoApplied(),
+                pricingSnapshot != null ? pricingSnapshot.shipperPromoApplied() : null
+        );
+        Long shipperChargeAmount = firstNonNull(
+                settlement.getShipperChargeAmountSnapshot(),
+                pricingSnapshot != null ? toLong(pricingSnapshot.shipperChargeAmount()) : null,
+                settlement.getTotalPrice()
+        );
+        BigDecimal driverFeeRate = firstNonNull(
+                settlement.getDriverFeeRateSnapshot(),
+                pricingSnapshot != null ? pricingSnapshot.driverFeeRate() : null
+        );
+        Long driverFeeAmount = firstNonNull(
+                settlement.getDriverFeeAmountSnapshot(),
+                pricingSnapshot != null ? toLong(pricingSnapshot.driverFeeAmount()) : null
+        );
+        Boolean driverPromoApplied = firstNonNull(
+                settlement.getDriverPromoApplied(),
+                pricingSnapshot != null ? pricingSnapshot.driverPromoApplied() : null
+        );
+        Long driverPayoutAmount = firstNonNull(
+                settlement.getDriverPayoutAmountSnapshot(),
+                pricingSnapshot != null ? toLong(pricingSnapshot.driverPayoutAmount()) : null,
+                transportPayment != null ? toLong(transportPayment.getNetAmountSnapshot()) : null
+        );
+        BigDecimal tossFeeRate = firstNonNull(
+                settlement.getTossFeeRateSnapshot(),
+                pricingSnapshot != null ? pricingSnapshot.tossFeeRate() : null
+        );
+        Long tossFeeAmount = firstNonNull(
+                settlement.getTossFeeAmountSnapshot(),
+                pricingSnapshot != null ? toLong(pricingSnapshot.tossFeeAmount()) : null
+        );
+        Long platformGrossRevenue = firstNonNull(
+                settlement.getPlatformGrossRevenueSnapshot(),
+                pricingSnapshot != null ? toLong(pricingSnapshot.platformGrossRevenue()) : null
+        );
+        Long platformNetRevenue = firstNonNull(
+                settlement.getPlatformNetRevenueSnapshot(),
+                pricingSnapshot != null ? toLong(pricingSnapshot.platformNetRevenue()) : null,
+                settlement.calculatePlatformRevenue()
+        );
+        Boolean negativeMargin = platformNetRevenue != null && platformNetRevenue < 0;
+        Long feePolicyId = firstNonNull(
+                settlement.getFeePolicyIdSnapshot(),
+                pricingSnapshot != null ? pricingSnapshot.feePolicyId() : null
+        );
+        LocalDateTime feePolicyAppliedAt = firstNonNull(
+                settlement.getFeePolicyAppliedAtSnapshot(),
+                pricingSnapshot != null ? pricingSnapshot.feePolicyAppliedAt() : null
+        );
         
         return SettlementResponse.builder()
                 .settlementId(settlement.getId())
@@ -429,6 +497,22 @@ public class SettlementService {
                 .paymentAmount(transportPayment != null ? toLong(transportPayment.getAmount()) : null)
                 .paymentFeeAmount(transportPayment != null ? toLong(transportPayment.getFeeAmountSnapshot()) : null)
                 .paymentNetAmount(transportPayment != null ? toLong(transportPayment.getNetAmountSnapshot()) : null)
+                .baseAmount(baseAmount)
+                .shipperFeeRate(shipperFeeRate)
+                .shipperFeeAmount(shipperFeeAmount)
+                .shipperPromoApplied(shipperPromoApplied)
+                .shipperChargeAmount(shipperChargeAmount)
+                .driverFeeRate(driverFeeRate)
+                .driverFeeAmount(driverFeeAmount)
+                .driverPromoApplied(driverPromoApplied)
+                .driverPayoutAmount(driverPayoutAmount)
+                .tossFeeRate(tossFeeRate)
+                .tossFeeAmount(tossFeeAmount)
+                .platformGrossRevenue(platformGrossRevenue)
+                .platformNetRevenue(platformNetRevenue)
+                .negativeMargin(negativeMargin)
+                .feePolicyId(feePolicyId)
+                .feePolicyAppliedAt(feePolicyAppliedAt)
                 .pgTid(transportPayment != null ? transportPayment.getPgTid() : null)
                 .proofUrl(transportPayment != null ? transportPayment.getProofUrl() : null)
                 .paidAt(transportPayment != null ? transportPayment.getPaidAt() : null)
@@ -446,5 +530,18 @@ public class SettlementService {
                 .feeDate(settlement.getFeeDate())
                 .feeCompleteDate(settlement.getFeeCompleteDate())
                 .build();
+    }
+
+    @SafeVarargs
+    private final <T> T firstNonNull(T... values) {
+        if (values == null) {
+            return null;
+        }
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 }

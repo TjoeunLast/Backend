@@ -113,9 +113,14 @@ public class AdminOrderService {
     }
 
     @Transactional(readOnly = true)
+    public Page<OrderResponse> getActiveOrdersForAdmin(Pageable pageable) {
+        return orderRepository.findActiveOrdersForAdmin(pageable)
+                .map(OrderResponse::from);
+    }
+
+    @Transactional(readOnly = true)
     public Page<OrderResponse> getCancelledOrdersForAdmin(Pageable pageable) {
-        List<String> cancelStatuses = List.of("CANCELLED_BY_USER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN");
-        return orderRepository.findByStatusIn(cancelStatuses, pageable)
+        return orderRepository.findCancelledOrdersForAdmin(pageable)
                 .map(OrderResponse::from);
     }
 

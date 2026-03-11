@@ -38,6 +38,12 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
 
        Page<Order> findByStatusIn(List<String> statuses, Pageable pageable);
 
+       @Query("SELECT o FROM Order o WHERE o.status NOT LIKE 'CANCELLED%' ORDER BY o.createdAt DESC")
+       Page<Order> findActiveOrdersForAdmin(Pageable pageable);
+
+       @Query("SELECT o FROM Order o WHERE o.status LIKE 'CANCELLED%' ORDER BY o.createdAt DESC")
+       Page<Order> findCancelledOrdersForAdmin(Pageable pageable);
+
        // 특정 차주의 특정 상태(완료)인 운행 건수를 카운트
        Long countByDriverNoAndStatus(Long driverNo, String status);
        
