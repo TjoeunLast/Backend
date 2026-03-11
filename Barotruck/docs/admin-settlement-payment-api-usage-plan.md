@@ -36,7 +36,6 @@
 
 - `GET /api/v1/settlements/admin/status-summary`
 - `POST /api/v1/payments/orders/{orderId}/mark-paid`
-- `GET /api/v1/payments/api-test/context`
 - `POST /api/admin/payment/orders/{orderId}/disputes`
 - `PATCH /api/admin/payment/orders/{orderId}/disputes/{disputeId}/status`
 
@@ -193,33 +192,6 @@
 
 ---
 
-## 3.5 `GET /api/v1/payments/api-test/context`
-
-### 역할
-- 운영 기능이 아니라 QA/개발 진단용 컨텍스트 조회
-- `orderId`, `disputeId`, `itemId`, `pgOrderId`, `paymentKey` 등 테스트 식별자 확인
-
-### 붙일 위치
-- 운영 기본 UI에는 붙이지 않는다.
-- 화주 정산 상세 `/global/billing/settlement/shipper/[id]`에 `debug=1` 쿼리일 때만 보이는 숨김 패널로 제한
-
-### 화면 구성
-- `QA Debug` 아코디언
-- 복사 가능한 식별자 목록
-
-### 구현 방식
-- 프로덕션에서는 숨김
-- 개발/스테이징 또는 `?debug=1`에서만 노출
-
-### 새로 만들 것
-- 제안 컴포넌트: `Admin_FrontEnd/barotruck_admin_web/app/features/shared/components/payment_debug_context_panel.tsx`
-
-### 주의
-- 일반 운영자가 보는 화면에 상시 노출하지 않는다.
-- 테스트용 ID를 운영 액션의 선행 단계로 쓰지 않는다.
-
----
-
 ## 4. 새로 만들 화면/컴포넌트 계획
 
 ## 4.1 바로 만들 것
@@ -249,7 +221,6 @@
 - 정산 상태
 - 빠른 액션 버튼
 - 분쟁 생성/처리 패널
-- 필요 시 QA debug 패널
 
 ---
 
@@ -268,12 +239,6 @@
 4. 상세 화면에 분쟁 생성/처리 UI 추가
 - `createDispute`, `updateDisputeStatus` 연결
 
-5. `api-test/context` 디버그 패널 추가
-- QA 편의 기능
-- 마지막 단계에서 제한적으로 노출
-
----
-
 ## 6. 채택/비채택 정리
 
 ### 채택
@@ -281,7 +246,6 @@
 - `POST /api/v1/payments/orders/{orderId}/mark-paid`
 - `POST /api/admin/payment/orders/{orderId}/disputes`
 - `PATCH /api/admin/payment/orders/{orderId}/disputes/{disputeId}/status`
-- `GET /api/v1/payments/api-test/context` (`debug only`)
 
 ### 제거 완료
 - `PATCH /api/v1/settlements/{orderId}/complete`
@@ -299,5 +263,4 @@
 1. 화주 정산 목록에서 `입금 반영` 빠른 액션이 동작한다.
 2. 화주 정산 상세에서 분쟁 생성과 분쟁 처리까지 끝난다.
 3. 대시보드 상단에서 정산 요약 수치가 분리되어 보인다.
-4. QA 모드에서만 테스트 컨텍스트 패널이 노출된다.
-5. 관리자 운영자는 메인 상태 변경과 분쟁 처리의 역할 차이를 화면에서 직관적으로 구분할 수 있다.
+4. 관리자 운영자는 메인 상태 변경과 분쟁 처리의 역할 차이를 화면에서 직관적으로 구분할 수 있다.

@@ -46,23 +46,8 @@
 
 ### 테스트/운영 보조 화면 노출 여부
 
-아래 파일은 기능 구현 자체보다 테스트/운영 도구에 가깝다.
-
-- `src/main/resources/static/toss-test.html`
-- `src/main/resources/static/toss-live-test.html`
-- `src/main/resources/static/payment-api-test.html`
-- `src/main/resources/static/payment-api-test.js`
-- `src/main/resources/static/payment-api-test-config.js`
-- `src/main/resources/static/admin-payment-test.html`
-- `src/main/resources/static/admin-payment-cycles.html`
-- `src/main/resources/static/admin-payment-cycle.html`
-- `src/main/resources/static/admin-payment-cycle.js`
-- `FrontNew/barotruck-app/src/features/common/tools/payment-e2e-lab/ui/PaymentE2ELabScreen.tsx`
-
-권장 조치:
-
-- prod 메뉴/라우트 노출 여부를 별도 판단
-- 가능하면 dev/test flag 뒤로 이동
+- 상태: 백엔드 정적 테스트 페이지 및 노출 경로 제거 완료
+- 비고: 앱 쪽 테스트 도구 노출 여부는 프론트 작업 범위에서 별도 판단
 
 ### legacy alias deprecation 순서
 

@@ -5,7 +5,6 @@ import java.io.IOException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException; // Added
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -67,11 +66,6 @@ public class AuthenticationController {
       HttpServletResponse response
   ) throws IOException {
     service.refreshToken(request, response);
-  }
-
-  @GetMapping("/demo-controller")
-  public ResponseEntity<String> sayHello() {
-    return ResponseEntity.ok("인증 성공! 이 메시지는 보안 토큰이 있어야만 보입니다.");
   }
   
 //[추가] 관리자용 빠른 유저 생성
