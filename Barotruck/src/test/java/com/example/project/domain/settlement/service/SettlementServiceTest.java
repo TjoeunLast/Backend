@@ -5,6 +5,8 @@ import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentDisputeStatus;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
+import com.example.project.domain.order.domain.Order;
+import com.example.project.domain.payment.repository.DriverPayoutItemRepository;
 import com.example.project.domain.payment.repository.PaymentDisputeRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.settlement.domain.Settlement;
@@ -46,13 +48,20 @@ class SettlementServiceTest {
     @Mock
     private PaymentDisputeRepository paymentDisputeRepository;
 
+    @Mock
+    private DriverPayoutItemRepository driverPayoutItemRepository;
+
     @InjectMocks
     private SettlementService settlementService;
 
     @Test
     void updateSettlementStatus_waitMovesPaymentToAdminHoldAndCreatesDispute() {
+        Order order = org.mockito.Mockito.mock(Order.class);
+        when(order.getOrderId()).thenReturn(100L);
+        when(order.getDriverNo()).thenReturn(300L);
         Settlement settlement = Settlement.builder()
                 .id(1L)
+                .order(order)
                 .status(SettlementStatus.READY)
                 .build();
         TransportPayment payment = TransportPayment.ready(
@@ -72,12 +81,17 @@ class SettlementServiceTest {
         when(settlementRepository.findByOrderId(100L)).thenReturn(Optional.of(settlement));
         when(transportPaymentRepository.findByOrderId(100L)).thenReturn(Optional.of(payment));
         when(paymentDisputeRepository.findByOrderId(100L)).thenReturn(Optional.empty());
+        when(usersRepository.findById(300L)).thenReturn(Optional.empty());
         when(settlementRepository.save(any(Settlement.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentDisputeRepository.save(any(PaymentDispute.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         SettlementResponse response = settlementService.updateSettlementStatus(100L, request, admin);
 
         assertThat(response.status()).isEqualTo(SettlementStatus.WAIT.name());
+        assertThat(response.baseAmount()).isEqualTo(108000L);
+        assertThat(response.shipperChargeAmount()).isEqualTo(120000L);
+        assertThat(response.shipperFeeAmount()).isEqualTo(12000L);
+        assertThat(response.driverPayoutAmount()).isEqualTo(108000L);
         assertThat(payment.getStatus()).isEqualTo(TransportPaymentStatus.ADMIN_HOLD);
         assertThat(settlement.getFeeCompleteDate()).isNull();
         verify(paymentDisputeRepository).save(any(PaymentDispute.class));
@@ -85,8 +99,12 @@ class SettlementServiceTest {
 
     @Test
     void updateSettlementStatus_completedForceConfirmsPaymentAndExistingDispute() {
+        Order order = org.mockito.Mockito.mock(Order.class);
+        when(order.getOrderId()).thenReturn(101L);
+        when(order.getDriverNo()).thenReturn(301L);
         Settlement settlement = Settlement.builder()
                 .id(2L)
+                .order(order)
                 .status(SettlementStatus.WAIT)
                 .build();
         TransportPayment payment = TransportPayment.ready(
@@ -116,6 +134,7 @@ class SettlementServiceTest {
         when(settlementRepository.findByOrderId(101L)).thenReturn(Optional.of(settlement));
         when(transportPaymentRepository.findByOrderId(101L)).thenReturn(Optional.of(payment));
         when(paymentDisputeRepository.findByOrderId(101L)).thenReturn(Optional.of(dispute));
+        when(usersRepository.findById(301L)).thenReturn(Optional.empty());
         when(settlementRepository.save(any(Settlement.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentDisputeRepository.save(any(PaymentDispute.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -125,6 +144,8 @@ class SettlementServiceTest {
         assertThat(payment.getStatus()).isEqualTo(TransportPaymentStatus.ADMIN_FORCE_CONFIRMED);
         assertThat(payment.getConfirmedAt()).isNotNull();
         assertThat(settlement.getFeeCompleteDate()).isNotNull();
+        assertThat(response.shipperChargeAmount()).isEqualTo(150000L);
+        assertThat(response.platformGrossRevenue()).isEqualTo(15000L);
         assertThat(dispute.getStatus()).isEqualTo(PaymentDisputeStatus.ADMIN_FORCE_CONFIRMED);
         assertThat(dispute.getAdminMemo()).isEqualTo("resolved");
     }

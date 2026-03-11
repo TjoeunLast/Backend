@@ -2,6 +2,7 @@ package com.example.project.domain.settlement.domain;
 
 
 import com.example.project.domain.order.domain.Order;
+import com.example.project.domain.payment.domain.TransportPaymentPricingSnapshot;
 import com.example.project.member.domain.Users;
 
 import jakarta.persistence.Column;
@@ -23,6 +24,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 @Entity
@@ -58,6 +61,51 @@ public class Settlement {
     @Column(name = "FEE_RATE")
     private Long feeRate; // 플랫폼 수수료율 (예: 10)
 
+    @Column(name = "BASE_AMOUNT_SNAPSHOT")
+    private Long baseAmountSnapshot;
+
+    @Column(name = "SHIPPER_FEE_RATE_SNAPSHOT", precision = 6, scale = 4)
+    private BigDecimal shipperFeeRateSnapshot;
+
+    @Column(name = "SHIPPER_FEE_AMOUNT_SNAPSHOT")
+    private Long shipperFeeAmountSnapshot;
+
+    @Column(name = "SHIPPER_PROMO_APPLIED")
+    private Boolean shipperPromoApplied;
+
+    @Column(name = "SHIPPER_CHARGE_AMOUNT_SNAPSHOT")
+    private Long shipperChargeAmountSnapshot;
+
+    @Column(name = "DRIVER_FEE_RATE_SNAPSHOT", precision = 6, scale = 4)
+    private BigDecimal driverFeeRateSnapshot;
+
+    @Column(name = "DRIVER_FEE_AMOUNT_SNAPSHOT")
+    private Long driverFeeAmountSnapshot;
+
+    @Column(name = "DRIVER_PROMO_APPLIED")
+    private Boolean driverPromoApplied;
+
+    @Column(name = "DRIVER_PAYOUT_AMOUNT_SNAPSHOT")
+    private Long driverPayoutAmountSnapshot;
+
+    @Column(name = "TOSS_FEE_RATE_SNAPSHOT", precision = 6, scale = 4)
+    private BigDecimal tossFeeRateSnapshot;
+
+    @Column(name = "TOSS_FEE_AMOUNT_SNAPSHOT")
+    private Long tossFeeAmountSnapshot;
+
+    @Column(name = "PLATFORM_GROSS_REVENUE_SNAPSHOT")
+    private Long platformGrossRevenueSnapshot;
+
+    @Column(name = "PLATFORM_NET_REVENUE_SNAPSHOT")
+    private Long platformNetRevenueSnapshot;
+
+    @Column(name = "FEE_POLICY_ID_SNAPSHOT")
+    private Long feePolicyIdSnapshot;
+
+    @Column(name = "FEE_POLICY_APPLIED_AT_SNAPSHOT")
+    private LocalDateTime feePolicyAppliedAtSnapshot;
+
     // 정산 상태(enum 문자열 저장)
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS")
@@ -85,14 +133,71 @@ public class Settlement {
     // --- 비즈니스 로직 메서드 ---
     
     /**
-     * 최종 플랫폼 순수익 계산 (수수료 수익)
-     * 수식: (최종 금액 * 수수료율) / 100
+     * 스냅샷이 있으면 저장된 정산 수익을 우선 사용하고, 없으면 레거시 필드로 폴백합니다.
      */
     public Long calculatePlatformRevenue() {
+        if (this.platformNetRevenueSnapshot != null) {
+            return this.platformNetRevenueSnapshot;
+        }
+        if (this.platformGrossRevenueSnapshot != null) {
+            return this.platformGrossRevenueSnapshot;
+        }
         if (this.totalPrice == null || this.feeRate == null) {
             return 0L;
         }
         return (this.totalPrice * this.feeRate) / 100;
+    }
+
+    public void applyPricingSnapshot(TransportPaymentPricingSnapshot snapshot) {
+        if (snapshot == null) {
+            return;
+        }
+
+        this.baseAmountSnapshot = toLong(snapshot.baseAmount());
+        this.shipperFeeRateSnapshot = scaleRate(snapshot.shipperFeeRate());
+        this.shipperFeeAmountSnapshot = toLong(snapshot.shipperFeeAmount());
+        this.shipperPromoApplied = snapshot.shipperPromoApplied();
+        this.shipperChargeAmountSnapshot = toLong(snapshot.shipperChargeAmount());
+        this.driverFeeRateSnapshot = scaleRate(snapshot.driverFeeRate());
+        this.driverFeeAmountSnapshot = toLong(snapshot.driverFeeAmount());
+        this.driverPromoApplied = snapshot.driverPromoApplied();
+        this.driverPayoutAmountSnapshot = toLong(snapshot.driverPayoutAmount());
+        this.tossFeeRateSnapshot = scaleRate(snapshot.tossFeeRate());
+        this.tossFeeAmountSnapshot = toLong(snapshot.tossFeeAmount());
+        this.platformGrossRevenueSnapshot = toLong(snapshot.platformGrossRevenue());
+        this.platformNetRevenueSnapshot = toLong(snapshot.platformNetRevenue());
+        this.feePolicyIdSnapshot = snapshot.feePolicyId();
+        this.feePolicyAppliedAtSnapshot = snapshot.feePolicyAppliedAt();
+
+        if (this.totalPrice == null || snapshot.shipperChargeAmount() != null) {
+            this.totalPrice = toLong(snapshot.shipperChargeAmount());
+        }
+        if (this.feeRate == null || snapshot.shipperFeeRate() != null) {
+            this.feeRate = toLegacyPercentage(snapshot.shipperFeeRate());
+        }
+    }
+
+    private Long toLong(BigDecimal value) {
+        if (value == null) {
+            return null;
+        }
+        return value.setScale(0, RoundingMode.HALF_UP).longValue();
+    }
+
+    private BigDecimal scaleRate(BigDecimal value) {
+        if (value == null) {
+            return null;
+        }
+        return value.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private Long toLegacyPercentage(BigDecimal rate) {
+        if (rate == null) {
+            return null;
+        }
+        return rate.multiply(new BigDecimal("100"))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
     }
     
 }

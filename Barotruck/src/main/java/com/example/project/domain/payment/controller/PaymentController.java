@@ -3,6 +3,8 @@ package com.example.project.domain.payment.controller;
 import com.example.project.domain.payment.dto.paymentRequest.*;
 import com.example.project.domain.payment.dto.paymentResponse.PaymentDisputeResponse;
 import com.example.project.domain.payment.dto.paymentResponse.DriverPayoutItemStatusResponse;
+import com.example.project.domain.payment.dto.paymentResponse.FeeBreakdownPreviewResponse;
+import com.example.project.domain.payment.dto.paymentResponse.FeeInvoiceStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.ShipperBillingAgreementResponse;
 import com.example.project.domain.payment.dto.paymentResponse.TossBillingContextResponse;
 import com.example.project.domain.payment.dto.paymentResponse.TossPrepareResponse;
@@ -186,6 +188,15 @@ public class PaymentController {
         return ApiResponse.ok(data);
     }
 
+    @PostMapping("/fee-preview")
+    @PreAuthorize("hasAnyRole('SHIPPER','ADMIN')")
+    public ApiResponse<FeeBreakdownPreviewResponse> previewFee(
+            @RequestBody FeePreviewRequest request,
+            @AuthenticationPrincipal Users currentUser
+    ) {
+        return ApiResponse.ok(transportPaymentService.previewFee(currentUser, request));
+    }
+
     @PostMapping("/orders/{orderId}/mark-paid")
     @PreAuthorize("hasRole('SHIPPER')")
     public ApiResponse<TransportPaymentResponse> markPaid(
@@ -311,22 +322,27 @@ public class PaymentController {
 
     @GetMapping("/fee-invoices/me")
     @PreAuthorize("hasRole('SHIPPER')")
-    public ApiResponse<?> myFeeInvoice(
+    public ApiResponse<FeeInvoiceStatusResponse> myFeeInvoice(
             @RequestParam("period") String period,
             @AuthenticationPrincipal Users currentUser
     ) {
-        var invoice = feeInvoiceService.getMyInvoice(currentUser, YearMonth.parse(period));
-        return ApiResponse.ok(invoice);
+        YearMonth parsedPeriod = YearMonth.parse(period);
+        feeInvoiceService.getMyInvoice(currentUser, parsedPeriod);
+        return ApiResponse.ok(
+                adminPaymentStatusQueryService.getFeeInvoiceStatus(currentUser.getUserId(), parsedPeriod.toString())
+        );
     }
 
     @PostMapping("/fee-invoices/{invoiceId}/mark-paid")
     @PreAuthorize("hasRole('SHIPPER')")
-    public ApiResponse<?> markFeeInvoicePaid(
+    public ApiResponse<FeeInvoiceStatusResponse> markFeeInvoicePaid(
             @PathVariable("invoiceId") Long invoiceId,
             @AuthenticationPrincipal Users currentUser
     ) {
         var invoice = feeInvoiceService.markInvoicePaid(currentUser, invoiceId);
-        return ApiResponse.ok(invoice);
+        return ApiResponse.ok(
+                adminPaymentStatusQueryService.getFeeInvoiceStatus(invoice.getShipperUserId(), invoice.getPeriod())
+        );
     }
 
     private void validateBillingIssueRequest(TossBillingIssueRequest request) {

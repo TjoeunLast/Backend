@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Repository;
 
 import com.example.project.member.domain.Users;
 import com.example.project.security.user.Role;
+
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface UsersRepository extends JpaRepository<Users, Long>{
@@ -34,6 +37,10 @@ public interface UsersRepository extends JpaRepository<Users, Long>{
 	           "LEFT JOIN FETCH u.shipper " +
 	           "WHERE u.userId = :userId")
 	    Optional<Users> findByIdWithAllDetails(@Param("userId") Long userId);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("SELECT u FROM Users u WHERE u.userId = :userId")
+	Optional<Users> findByIdForUpdate(@Param("userId") Long userId);
 
 	List<Users> findAllByDelflagAndSuspendedUntilLessThanEqual(String delflag, LocalDateTime suspendedUntil);
 

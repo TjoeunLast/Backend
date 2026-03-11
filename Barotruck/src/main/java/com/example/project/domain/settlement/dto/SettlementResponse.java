@@ -3,6 +3,7 @@ package com.example.project.domain.settlement.dto;
 import com.example.project.domain.settlement.domain.Settlement;
 import lombok.Builder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Builder
@@ -24,6 +25,22 @@ public record SettlementResponse(
         Long paymentAmount,
         Long paymentFeeAmount,
         Long paymentNetAmount,
+        Long baseAmount,
+        BigDecimal shipperFeeRate,
+        Long shipperFeeAmount,
+        Boolean shipperPromoApplied,
+        Long shipperChargeAmount,
+        BigDecimal driverFeeRate,
+        Long driverFeeAmount,
+        Boolean driverPromoApplied,
+        Long driverPayoutAmount,
+        BigDecimal tossFeeRate,
+        Long tossFeeAmount,
+        Long platformGrossRevenue,
+        Long platformNetRevenue,
+        Boolean negativeMargin,
+        Long feePolicyId,
+        LocalDateTime feePolicyAppliedAt,
         String pgTid,
         String proofUrl,
         LocalDateTime paidAt,
@@ -68,6 +85,26 @@ public record SettlementResponse(
                 .paymentAmount(null)
                 .paymentFeeAmount(null)
                 .paymentNetAmount(null)
+                .baseAmount(settlement.getBaseAmountSnapshot())
+                .shipperFeeRate(settlement.getShipperFeeRateSnapshot())
+                .shipperFeeAmount(settlement.getShipperFeeAmountSnapshot())
+                .shipperPromoApplied(settlement.getShipperPromoApplied())
+                .shipperChargeAmount(settlement.getShipperChargeAmountSnapshot())
+                .driverFeeRate(settlement.getDriverFeeRateSnapshot())
+                .driverFeeAmount(settlement.getDriverFeeAmountSnapshot())
+                .driverPromoApplied(settlement.getDriverPromoApplied())
+                .driverPayoutAmount(settlement.getDriverPayoutAmountSnapshot())
+                .tossFeeRate(settlement.getTossFeeRateSnapshot())
+                .tossFeeAmount(settlement.getTossFeeAmountSnapshot())
+                .platformGrossRevenue(settlement.getPlatformGrossRevenueSnapshot())
+                .platformNetRevenue(settlement.getPlatformNetRevenueSnapshot())
+                .negativeMargin(
+                        settlement.getPlatformNetRevenueSnapshot() != null
+                                ? settlement.getPlatformNetRevenueSnapshot() < 0
+                                : settlement.calculatePlatformRevenue() < 0
+                )
+                .feePolicyId(settlement.getFeePolicyIdSnapshot())
+                .feePolicyAppliedAt(settlement.getFeePolicyAppliedAtSnapshot())
                 .pgTid(null)
                 .proofUrl(null)
                 .paidAt(null)

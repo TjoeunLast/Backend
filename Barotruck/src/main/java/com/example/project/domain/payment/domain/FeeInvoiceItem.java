@@ -38,17 +38,57 @@ public class FeeInvoiceItem {
     @Column(name = "FEE_AMOUNT", nullable = false, precision = 18, scale = 2)
     private BigDecimal feeAmount;
 
+    @Column(name = "SHIPPER_CHARGE_AMOUNT", precision = 18, scale = 2)
+    private BigDecimal shipperChargeAmount;
+
+    @Column(name = "SHIPPER_FEE_RATE", precision = 6, scale = 4)
+    private BigDecimal shipperFeeRate;
+
+    @Column(name = "DRIVER_FEE_RATE", precision = 6, scale = 4)
+    private BigDecimal driverFeeRate;
+
+    @Column(name = "DRIVER_FEE_AMOUNT", precision = 18, scale = 2)
+    private BigDecimal driverFeeAmount;
+
+    @Column(name = "DRIVER_PAYOUT_AMOUNT", precision = 18, scale = 2)
+    private BigDecimal driverPayoutAmount;
+
+    @Column(name = "TOSS_FEE_RATE", precision = 6, scale = 4)
+    private BigDecimal tossFeeRate;
+
+    @Column(name = "TOSS_FEE_AMOUNT", precision = 18, scale = 2)
+    private BigDecimal tossFeeAmount;
+
+    @Column(name = "PLATFORM_GROSS_REVENUE", precision = 18, scale = 2)
+    private BigDecimal platformGrossRevenue;
+
+    @Column(name = "PLATFORM_NET_REVENUE", precision = 18, scale = 2)
+    private BigDecimal platformNetRevenue;
+
     // 항목 생성 시각
     @Column(name = "CREATED_AT", nullable = false)
     private LocalDateTime createdAt;
 
     // 주문 단위 인보이스 항목 생성
-    public static FeeInvoiceItem of(Long invoiceId, Long orderId, BigDecimal feeAmount) {
+    public static FeeInvoiceItem of(Long invoiceId, TransportPayment payment) {
         return FeeInvoiceItem.builder()
                 .invoiceId(invoiceId)
-                .orderId(orderId)
-                .feeAmount(feeAmount)
+                .orderId(payment.getOrderId())
+                .feeAmount(payment.getFeeAmountSnapshot())
+                .shipperChargeAmount(payment.getShipperChargeAmountSnapshot())
+                .shipperFeeRate(payment.getShipperFeeRateSnapshot())
+                .driverFeeRate(payment.getDriverFeeRateSnapshot())
+                .driverFeeAmount(payment.getDriverFeeAmountSnapshot())
+                .driverPayoutAmount(payment.getDriverPayoutAmountSnapshot())
+                .tossFeeRate(payment.getTossFeeRateSnapshot())
+                .tossFeeAmount(payment.getTossFeeAmountSnapshot())
+                .platformGrossRevenue(payment.getPlatformGrossRevenueSnapshot())
+                .platformNetRevenue(payment.getPlatformNetRevenueSnapshot())
                 .createdAt(LocalDateTime.now())
                 .build();
+    }
+
+    public BigDecimal getShipperFeeAmount() {
+        return feeAmount;
     }
 }

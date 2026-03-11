@@ -6,16 +6,14 @@ import com.example.project.domain.payment.domain.PaymentGatewayTransaction;
 import com.example.project.domain.payment.domain.PaymentGatewayWebhookEvent;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentProvider;
-import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
 import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.dto.paymentRequest.TossConfirmRequest;
 import com.example.project.domain.payment.dto.paymentRequest.TossPrepareRequest;
+import com.example.project.domain.payment.dto.paymentResponse.FeeBreakdownPreviewResponse;
 import com.example.project.domain.payment.dto.paymentResponse.TossPrepareResponse;
 import com.example.project.domain.payment.port.OrderPort;
-import com.example.project.domain.payment.port.UserPort;
 import com.example.project.domain.payment.repository.PaymentGatewayTransactionRepository;
-import com.example.project.domain.payment.repository.TransportPaymentRepository;
-import com.example.project.domain.payment.service.core.FeePolicyService;
+import com.example.project.domain.payment.service.core.MarketplaceFeeCalculationService;
 import com.example.project.domain.payment.service.core.PaymentLifecycleService;
 import com.example.project.domain.payment.service.core.TossPayoutWebhookService;
 import com.example.project.global.toss.client.TossPaymentClient;
@@ -31,23 +29,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class TossPaymentService {
-    private static final BigDecimal TOSS_SURCHARGE_RATE = new BigDecimal("0.10");
-
     private final TossPaymentClient tossPaymentClient;
     private final PaymentGatewayTransactionRepository paymentGatewayTransactionRepository;
     private final PaymentLifecycleService paymentLifecycleService;
-    private final FeePolicyService feePolicyService;
-    private final TransportPaymentRepository transportPaymentRepository;
-    private final UserPort userPort;
+    private final MarketplaceFeeCalculationService marketplaceFeeCalculationService;
     private final OrderPort orderPort;
     private final TossPayoutWebhookService tossPayoutWebhookService;
     private final ObjectMapper objectMapper;
@@ -86,22 +78,18 @@ public class TossPaymentService {
             throw new IllegalStateException("assigned driver not found");
         }
 
-        BigDecimal driverAmount = snap.amount();
-        if (driverAmount == null || driverAmount.compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal baseAmount = snap.amount();
+        if (baseAmount == null || baseAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("invalid payment amount");
         }
-        Long userLevel = userPort.getRequiredUser(snap.shipperUserId()).userLevel();
-        boolean firstPaymentPromoEligible =
-                transportPaymentRepository.countByShipperUserIdAndStatusIn(
-                        snap.shipperUserId(),
-                        paidOrConfirmedStatuses()
-                ) == 0;
-        FeePolicyService.FeeResult fee = feePolicyService.calculate(
-                driverAmount,
-                userLevel,
-                firstPaymentPromoEligible
+        FeeBreakdownPreviewResponse breakdown = marketplaceFeeCalculationService.calculate(
+                MarketplaceFeeCalculationService.CalculationCommand.builder()
+                        .orderId(orderId)
+                        .baseAmount(baseAmount)
+                        .includeTossFee(true)
+                        .build()
         );
-        BigDecimal amount = applyTossSurcharge(fee.chargedAmount(), driverAmount);
+        BigDecimal amount = breakdown.shipperChargeAmount();
 
         PaymentMethod method = resolveTossMethod(request.getMethod(), request.getPayChannel());
         PayChannel payChannel = resolvePayChannel(method, request.getPayChannel());
@@ -398,23 +386,6 @@ public class TossPaymentService {
             return PayChannel.CARD;
         }
         return PayChannel.TRANSFER;
-    }
-
-    private List<TransportPaymentStatus> paidOrConfirmedStatuses() {
-        return List.of(
-                TransportPaymentStatus.PAID,
-                TransportPaymentStatus.CONFIRMED,
-                TransportPaymentStatus.ADMIN_FORCE_CONFIRMED
-        );
-    }
-
-    private BigDecimal applyTossSurcharge(BigDecimal levelChargedAmount, BigDecimal baseAmount) {
-        if (levelChargedAmount == null) {
-            return null;
-        }
-        BigDecimal safeBaseAmount = baseAmount == null ? BigDecimal.ZERO : baseAmount;
-        BigDecimal tossSurcharge = safeBaseAmount.multiply(TOSS_SURCHARGE_RATE);
-        return levelChargedAmount.add(tossSurcharge).setScale(2, RoundingMode.HALF_UP);
     }
 
     private PaymentMethod resolveConfirmedMethod(String methodText, PaymentMethod fallback) {

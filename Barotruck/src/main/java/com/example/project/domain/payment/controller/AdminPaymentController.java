@@ -1,5 +1,6 @@
 package com.example.project.domain.payment.controller;
 
+import com.example.project.domain.payment.dto.paymentRequest.AdminFeePreviewRequest;
 import com.example.project.domain.payment.dto.paymentRequest.CreatePaymentDisputeRequest;
 import com.example.project.domain.payment.dto.paymentRequest.CancelTossPaymentRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdateFeePolicyRequest;
@@ -10,6 +11,7 @@ import com.example.project.domain.payment.dto.paymentResponse.DriverPayoutBatchS
 import com.example.project.domain.payment.dto.paymentResponse.DriverPayoutItemStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.AdminBillingAgreementStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.FeeAutoChargeAttemptListResponse;
+import com.example.project.domain.payment.dto.paymentResponse.FeeBreakdownPreviewResponse;
 import com.example.project.domain.payment.dto.paymentResponse.FeePolicyResponse;
 import com.example.project.domain.payment.dto.paymentResponse.FeeInvoiceStatusResponse;
 import com.example.project.domain.payment.dto.paymentResponse.GatewayTransactionStatusResponse;
@@ -25,6 +27,7 @@ import com.example.project.domain.payment.service.core.DriverPayoutService;
 import com.example.project.domain.payment.service.core.FeeInvoiceBatchService;
 import com.example.project.domain.payment.service.core.FeePolicyService;
 import com.example.project.domain.payment.service.core.FeeInvoiceService;
+import com.example.project.domain.payment.service.core.MarketplaceFeeCalculationService;
 import com.example.project.domain.payment.service.core.PaymentReconciliationService;
 import com.example.project.domain.payment.service.core.PaymentRetryQueueService;
 import com.example.project.domain.payment.service.core.TossPaymentOpsService;
@@ -52,6 +55,7 @@ public class AdminPaymentController {
     private final DriverPayoutService driverPayoutService;
     private final FeeInvoiceService feeInvoiceService;
     private final FeePolicyService feePolicyService;
+    private final MarketplaceFeeCalculationService marketplaceFeeCalculationService;
     private final PaymentReconciliationService paymentReconciliationService;
     private final PaymentRetryQueueService paymentRetryQueueService;
     private final AdminPaymentStatusQueryService adminPaymentStatusQueryService;
@@ -108,9 +112,14 @@ public class AdminPaymentController {
 
     @PostMapping("/fee-invoices/generate")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResponse<?> generateFeeInvoice(@RequestParam("shipperUserId") Long shipperUserId, @RequestParam String period) {
+    public ApiResponse<FeeInvoiceStatusResponse> generateFeeInvoice(
+            @RequestParam("shipperUserId") Long shipperUserId,
+            @RequestParam String period
+    ) {
         var invoice = feeInvoiceService.generateForShipper(shipperUserId, YearMonth.parse(period));
-        return ApiResponse.ok(invoice);
+        return ApiResponse.ok(
+                adminPaymentStatusQueryService.getFeeInvoiceStatus(invoice.getShipperUserId(), invoice.getPeriod())
+        );
     }
 
     @GetMapping("/fee-invoices/status")
@@ -294,6 +303,28 @@ public class AdminPaymentController {
         return ApiResponse.ok(feePolicyService.updatePolicy(request));
     }
 
+    @PostMapping("/fee-policy/preview")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<FeeBreakdownPreviewResponse> previewFeePolicy(
+            @Valid @RequestBody AdminFeePreviewRequest request
+    ) {
+        validatePreviewLevel(request.getShipperLevel(), "shipperLevel");
+        validatePreviewLevel(request.getDriverLevel(), "driverLevel");
+
+        return ApiResponse.ok(
+                marketplaceFeeCalculationService.calculate(
+                        MarketplaceFeeCalculationService.CalculationCommand.builder()
+                                .baseAmount(request.getBaseAmount())
+                                .shipperUserLevel(defaultLevel(request.getShipperLevel()))
+                                .driverUserLevel(defaultLevel(request.getDriverLevel()))
+                                .shipperPromoEligible(Boolean.TRUE.equals(request.getShipperPromoApplied()))
+                                .driverPromoEligible(Boolean.TRUE.equals(request.getDriverPromoApplied()))
+                                .includeTossFee(request.getIncludeTossFee() == null || request.getIncludeTossFee())
+                                .build()
+                )
+        );
+    }
+
     @PostMapping("/fee-policy/levels")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<LevelFeePolicyResponse> updateFeePolicyByLevel(
@@ -306,6 +337,19 @@ public class AdminPaymentController {
         if (value == null || value <= 0) {
             throw new IllegalArgumentException(fieldName + " must be a positive number");
         }
+    }
+
+    private void validatePreviewLevel(Long value, String fieldName) {
+        if (value == null) {
+            return;
+        }
+        if (value < 0) {
+            throw new IllegalArgumentException(fieldName + " must be 0 or greater");
+        }
+    }
+
+    private Long defaultLevel(Long value) {
+        return value == null ? 0L : value;
     }
 
     private void validateCancelRequest(CancelTossPaymentRequest request) {

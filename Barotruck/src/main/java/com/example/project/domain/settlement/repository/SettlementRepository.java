@@ -31,19 +31,19 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
 
     /**
      * [관리자용] 기간별 요약 통계 집계
-     * 수익 계산 수식: (totalPrice * feeRate / 100)
+     * 신규 건은 저장된 snapshot을 우선 사용하고, 구버전 데이터만 레거시 필드로 폴백한다.
      */
-    @Query("SELECT SUM(s.totalPrice), " +
-           "SUM(s.totalPrice * s.feeRate / 100), " +
-           "SUM(s.levelDiscount + s.couponDiscount), " +
+    @Query("SELECT SUM(COALESCE(s.shipperChargeAmountSnapshot, s.totalPrice, 0)), " +
+           "SUM(COALESCE(s.platformNetRevenueSnapshot, s.platformGrossRevenueSnapshot, (s.totalPrice * s.feeRate / 100), 0)), " +
+           "SUM(COALESCE(s.levelDiscount, 0) + COALESCE(s.couponDiscount, 0)), " +
            "COUNT(s) " +
            "FROM Settlement s " +
            "WHERE s.feeDate BETWEEN :start AND :end")
     Object[] getSettlementSummary(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    @Query("SELECT COALESCE(SUM(s.totalPrice), 0), " +
-           "COALESCE(SUM(CASE WHEN s.status <> :completedStatus THEN s.totalPrice ELSE 0 END), 0), " +
-           "COALESCE(SUM(CASE WHEN s.status = :completedStatus THEN s.totalPrice ELSE 0 END), 0), " +
+    @Query("SELECT COALESCE(SUM(COALESCE(s.shipperChargeAmountSnapshot, s.totalPrice, 0)), 0), " +
+           "COALESCE(SUM(CASE WHEN s.status <> :completedStatus THEN COALESCE(s.shipperChargeAmountSnapshot, s.totalPrice, 0) ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN s.status = :completedStatus THEN COALESCE(s.shipperChargeAmountSnapshot, s.totalPrice, 0) ELSE 0 END), 0), " +
            "COUNT(s), " +
            "COALESCE(SUM(CASE WHEN s.status <> :completedStatus THEN 1 ELSE 0 END), 0), " +
            "COALESCE(SUM(CASE WHEN s.status = :completedStatus THEN 1 ELSE 0 END), 0) " +
@@ -53,11 +53,11 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
     /**
      * [관리자용] 지역별 매출 및 정산 건수 집계 (Order의 Snapshot 정보 활용)
      */
-    @Query("SELECT o.snapshot.puProvince, SUM(s.totalPrice), COUNT(s) " +
+    @Query("SELECT o.snapshot.puProvince, SUM(COALESCE(s.shipperChargeAmountSnapshot, s.totalPrice, 0)), COUNT(s) " +
            "FROM Settlement s JOIN s.order o " +
            "WHERE s.feeDate BETWEEN :start AND :end " +
            "GROUP BY o.snapshot.puProvince " +
-           "ORDER BY SUM(s.totalPrice) DESC")
+           "ORDER BY SUM(COALESCE(s.shipperChargeAmountSnapshot, s.totalPrice, 0)) DESC")
     List<Object[]> getSettlementStatsByRegion(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     @Query("SELECT s " +

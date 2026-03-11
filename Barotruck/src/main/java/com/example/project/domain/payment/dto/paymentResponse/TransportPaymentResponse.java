@@ -19,6 +19,7 @@ public record TransportPaymentResponse(
         BigDecimal feeRateSnapshot,
         BigDecimal feeAmountSnapshot,
         BigDecimal netAmountSnapshot,
+        PaymentAmountSnapshotResponse amountSnapshot,
         PaymentMethod method,
         PaymentTiming paymentTiming,
         TransportPaymentStatus status,
@@ -37,6 +38,7 @@ public record TransportPaymentResponse(
                 .feeRateSnapshot(p.getFeeRateSnapshot())
                 .feeAmountSnapshot(p.getFeeAmountSnapshot())
                 .netAmountSnapshot(p.getNetAmountSnapshot())
+                .amountSnapshot(PaymentAmountSnapshotResponse.from(p))
                 .method(p.getMethod())
                 .paymentTiming(p.getPaymentTiming())
                 .status(p.getStatus())
