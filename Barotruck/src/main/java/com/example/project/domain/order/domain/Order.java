@@ -309,6 +309,7 @@ public class Order {
                 .insuranceFee(request.getInsuranceFee())
                 .payMethod(request.getPayMethod())
                 .instant(request.isInstant())
+                .autoDispatchLocked(request.isAutoDispatchLocked())
                 .memo(request.getMemo())
                 .tag(request.getTag())
                 

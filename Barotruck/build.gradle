@@ -44,6 +44,10 @@ configurations {
     }
 }
 
+configurations.configureEach {
+    exclude group: 'commons-logging', module: 'commons-logging'
+}
+
 repositories {
     mavenCentral()
 }

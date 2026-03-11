@@ -66,5 +66,12 @@ public class OrderSnapshot {
     private List<String> tag;
 
     private boolean instant;
+    @Builder.Default
+    @Column(name = "AUTO_DISPATCH_LOCKED")
+    private Boolean autoDispatchLocked = false;
+
+    public boolean isAutoDispatchLocked() {
+        return Boolean.TRUE.equals(autoDispatchLocked);
+    }
 
 }

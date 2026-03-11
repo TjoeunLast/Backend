@@ -100,6 +100,10 @@ public class Users implements UserDetails {
     @Column(name = "admin_force_allocate_blocked", columnDefinition = "NUMBER(1,0) DEFAULT 0")
     private Boolean adminForceAllocateBlocked = false;
 
+    @Builder.Default
+    @Column(name = "auto_dispatch_enabled", columnDefinition = "NUMBER(1,0) DEFAULT 1")
+    private Boolean autoDispatchEnabled = true;
+
     // User.java 내부
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private Shipper shipper;
@@ -158,6 +162,10 @@ public class Users implements UserDetails {
 
     public boolean isAdminForceAllocateBlocked() {
         return Boolean.TRUE.equals(this.adminForceAllocateBlocked);
+    }
+
+    public boolean isAutoDispatchEnabled() {
+        return !Boolean.FALSE.equals(this.autoDispatchEnabled);
     }
 
     @Override
