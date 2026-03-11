@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 public class ReviewResponseDto {
     private Long reviewId;
     private String writerNickname; // 작성자 이름 (Users 엔티티 활용)
+    private String targetNickname; // 리뷰 대상자 이름
     private Integer rating;
     private String content;
     private LocalDateTime createdAt;
@@ -15,6 +16,7 @@ public class ReviewResponseDto {
     public ReviewResponseDto(Review review) {
         this.reviewId = review.getReviewId();
         this.writerNickname = review.getWriter().getNickname();
+        this.targetNickname = review.getTarget().getNickname();
         this.rating = review.getRating();
         this.content = review.getContent();
         this.createdAt = review.getCreatedAt();
