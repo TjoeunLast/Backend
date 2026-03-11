@@ -122,6 +122,36 @@ public class DriverPayoutService {
     }
 
     @Transactional
+    public void tryAutoRequestPayoutForOrder(Long orderId, String triggerSource) {
+        String resolvedTriggerSource = (triggerSource == null || triggerSource.isBlank())
+                ? "AUTO"
+                : triggerSource.trim();
+
+        if (orderId == null || orderId <= 0) {
+            log.warn("skip auto payout trigger. invalid orderId={}, trigger={}", orderId, resolvedTriggerSource);
+            return;
+        }
+
+        try {
+            DriverPayoutItem item = requestPayoutForOrder(orderId);
+            log.info(
+                    "auto payout trigger handled. orderId={}, trigger={}, itemId={}, status={}",
+                    orderId,
+                    resolvedTriggerSource,
+                    item != null ? item.getItemId() : null,
+                    item != null ? item.getStatus() : null
+            );
+        } catch (Exception e) {
+            log.warn(
+                    "auto payout trigger failed. orderId={}, trigger={}, reason={}",
+                    orderId,
+                    resolvedTriggerSource,
+                    e.getMessage()
+            );
+        }
+    }
+
+    @Transactional
     public DriverPayoutItem syncPayoutStatusByOrderId(Long orderId) {
         if (orderId == null || orderId <= 0) {
             throw new IllegalArgumentException("orderId must be a positive number");

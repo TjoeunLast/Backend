@@ -36,6 +36,7 @@ public class PaymentLifecycleService {
     private final FeePolicyService feePolicyService;
     private final SettlementRepository settlementRepository;
     private final DriverPayoutItemRepository driverPayoutItemRepository;
+    private final DriverPayoutService driverPayoutService;
     private final EntityManager entityManager;
     private final NotificationService notificationService;
 
@@ -128,19 +129,13 @@ public class PaymentLifecycleService {
         if (payment.getDriverUserId() == null || !payment.getDriverUserId().equals(currentUser.getUserId())) {
             throw new IllegalStateException("driver can confirm only own assigned payment");
         }
-
-        payment.confirm(LocalDateTime.now());
-        orderPort.setOrderConfirmed(orderId);
-
-        TransportPayment saved = transportPaymentRepository.save(payment);
-        completeSettlementOnConfirm(orderId);
-        sendPaymentNotificationSafely(
-                payment.getShipperUserId(),
+        return confirmPaymentAndTriggerPayout(
+                payment,
+                orderId,
+                "PAYMENT_CONFIRMED_BY_DRIVER",
                 "정산 확인 완료",
-                "차주가 결제를 최종 확인했습니다.",
-                orderId
+                "차주가 결제를 최종 확인했습니다."
         );
-        return saved;
     }
 
     @Transactional
@@ -189,6 +184,15 @@ public class PaymentLifecycleService {
         if (payment.getStatus() == TransportPaymentStatus.PAID) {
             upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), snap.amount(), fee);
             orderPort.setOrderPaid(tx.getOrderId());
+            if (shouldAutoConfirmGatewayPayment(tx, payment)) {
+                return confirmPaymentAndTriggerPayout(
+                        payment,
+                        tx.getOrderId(),
+                        "PAYMENT_CONFIRMED_BY_TOSS",
+                        "정산 자동 확인 완료",
+                        "토스 결제가 완료되어 자동으로 정산 확인 및 지급 요청이 시작되었습니다."
+                );
+            }
             return payment;
         }
 
@@ -199,6 +203,15 @@ public class PaymentLifecycleService {
 
         TransportPayment saved = transportPaymentRepository.save(payment);
         upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), snap.amount(), fee);
+        if (shouldAutoConfirmGatewayPayment(tx, saved)) {
+            return confirmPaymentAndTriggerPayout(
+                    saved,
+                    tx.getOrderId(),
+                    "PAYMENT_CONFIRMED_BY_TOSS",
+                    "정산 자동 확인 완료",
+                    "토스 결제가 완료되어 자동으로 정산 확인 및 지급 요청이 시작되었습니다."
+            );
+        }
         sendPaymentNotificationSafely(
                 snap.driverUserId(),
                 "화주 결제 완료",
@@ -206,6 +219,42 @@ public class PaymentLifecycleService {
                 tx.getOrderId()
         );
         return saved;
+    }
+
+    private TransportPayment confirmPaymentAndTriggerPayout(
+            TransportPayment payment,
+            Long orderId,
+            String payoutTriggerSource,
+            String shipperNotificationTitle,
+            String shipperNotificationBody
+    ) {
+        if (payment.getStatus() == TransportPaymentStatus.CONFIRMED
+                || payment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED) {
+            return payment;
+        }
+
+        payment.confirm(LocalDateTime.now());
+        orderPort.setOrderConfirmed(orderId);
+
+        TransportPayment saved = transportPaymentRepository.save(payment);
+        completeSettlementOnConfirm(orderId);
+        driverPayoutService.tryAutoRequestPayoutForOrder(orderId, payoutTriggerSource);
+        sendPaymentNotificationSafely(
+                payment.getShipperUserId(),
+                shipperNotificationTitle,
+                shipperNotificationBody,
+                orderId
+        );
+        return saved;
+    }
+
+    private boolean shouldAutoConfirmGatewayPayment(
+            PaymentGatewayTransaction tx,
+            TransportPayment payment
+    ) {
+        return tx != null
+                && payment != null
+                && payment.getMethod() != PaymentMethod.CASH;
     }
 
     @Transactional

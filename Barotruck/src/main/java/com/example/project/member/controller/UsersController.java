@@ -103,6 +103,16 @@ public class UsersController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/auto-dispatch-enabled")
+    public ResponseEntity<Void> updateAutoDispatchEnabled(
+            @AuthenticationPrincipal Users userDetails,
+            @RequestBody Map<String, Boolean> body
+    ) {
+        boolean enabled = !Boolean.FALSE.equals(body.get("enabled"));
+        service.updateAutoDispatchEnabled(userDetails.getUserId(), enabled);
+        return ResponseEntity.ok().build();
+    }
+
     // =========================
     // 6) 유저 정보 조회 (프로필 포함)
     // =========================

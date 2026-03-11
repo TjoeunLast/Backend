@@ -60,6 +60,11 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getAvailableOrders(user.getUserId()));
     }
 
+    @GetMapping("/{orderId}")
+    public ResponseEntity<OrderResponse> getOrderDetail(@PathVariable("orderId") Long orderId) {
+        return ResponseEntity.ok(orderService.getOrderDetail(orderId));
+    }
+
     /**
      * 신규: 드라이버의 차량 사격에 맞춘 '추천 오더' 조회
      * 인증된 사용자의 정보를 기반으로 내 차에 맞는 짐만 필터링합니다.

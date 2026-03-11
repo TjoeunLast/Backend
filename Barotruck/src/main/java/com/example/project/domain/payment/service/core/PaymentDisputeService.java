@@ -33,6 +33,7 @@ public class PaymentDisputeService {
     private final OrderPort orderPort;
     private final NotificationService notificationService;
     private final UsersRepository usersRepository;
+    private final DriverPayoutService driverPayoutService;
 
     @Transactional
     public PaymentDispute createDispute(Users currentUser, Long orderId, CreatePaymentDisputeRequest request) {
@@ -104,6 +105,9 @@ public class PaymentDisputeService {
         });
 
         PaymentDispute saved = paymentDisputeRepository.save(dispute);
+        if (nextStatus == PaymentDisputeStatus.ADMIN_FORCE_CONFIRMED) {
+            driverPayoutService.tryAutoRequestPayoutForOrder(orderId, "DISPUTE_ADMIN_FORCE_CONFIRMED");
+        }
         notifyDisputeStatusUpdated(payment, nextStatus, orderId);
         return saved;
     }

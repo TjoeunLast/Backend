@@ -74,6 +74,10 @@ public class Users implements UserDetails {
     private String delflag = "N";
 
     private LocalDate deletedate;
+
+    @Column(name = "suspended_until")
+    private LocalDateTime suspendedUntil;
+
     @Column(length = 1)
     private String regflag;
 
@@ -95,6 +99,10 @@ public class Users implements UserDetails {
     @Builder.Default
     @Column(name = "admin_force_allocate_blocked", columnDefinition = "NUMBER(1,0) DEFAULT 0")
     private Boolean adminForceAllocateBlocked = false;
+
+    @Builder.Default
+    @Column(name = "auto_dispatch_enabled", columnDefinition = "NUMBER(1,0) DEFAULT 1")
+    private Boolean autoDispatchEnabled = true;
 
     // User.java 내부
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
@@ -156,6 +164,10 @@ public class Users implements UserDetails {
         return Boolean.TRUE.equals(this.adminForceAllocateBlocked);
     }
 
+    public boolean isAutoDispatchEnabled() {
+        return !Boolean.FALSE.equals(this.autoDispatchEnabled);
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(
@@ -210,5 +222,23 @@ public class Users implements UserDetails {
     // 복구 메서드
     public void restore() {
         this.delflag = "N";
+        this.deletedate = null;
+        this.suspendedUntil = null;
+    }
+
+    public void suspendTemporarily(LocalDateTime suspendedUntil) {
+        this.delflag = "A";
+        this.deletedate = LocalDate.now();
+        this.suspendedUntil = suspendedUntil;
+    }
+
+    public void suspendPermanently() {
+        this.delflag = "A";
+        this.deletedate = LocalDate.now();
+        this.suspendedUntil = null;
+    }
+
+    public boolean isPermanentlySuspended() {
+        return "A".equals(this.delflag) && this.suspendedUntil == null;
     }
 }

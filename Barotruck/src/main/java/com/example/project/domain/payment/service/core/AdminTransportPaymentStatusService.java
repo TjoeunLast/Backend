@@ -35,6 +35,7 @@ public class AdminTransportPaymentStatusService {
     private final SettlementRepository settlementRepository;
     private final OrderRepository orderRepository;
     private final OrderPort orderPort;
+    private final DriverPayoutService driverPayoutService;
 
     @Transactional
     public TransportPayment updateStatus(
@@ -74,6 +75,12 @@ public class AdminTransportPaymentStatusService {
         settlementRepository.save(settlement);
         if (updatedDispute != null) {
             paymentDisputeRepository.save(updatedDispute);
+        }
+        if (shouldTriggerAutoPayout(request.getStatus())) {
+            driverPayoutService.tryAutoRequestPayoutForOrder(
+                    orderId,
+                    "ADMIN_PAYMENT_STATUS_" + request.getStatus().name()
+            );
         }
         return payment;
     }
@@ -252,6 +259,11 @@ public class AdminTransportPaymentStatusService {
         if (payment.getFeeRateSnapshot() != null) {
             settlement.setFeeRate(toPercentage(payment.getFeeRateSnapshot()));
         }
+    }
+
+    private boolean shouldTriggerAutoPayout(TransportPaymentStatus status) {
+        return status == TransportPaymentStatus.CONFIRMED
+                || status == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED;
     }
 
     private PaymentMethod resolvePaymentMethod(

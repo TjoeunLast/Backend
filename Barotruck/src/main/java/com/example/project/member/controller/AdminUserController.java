@@ -3,6 +3,7 @@ package com.example.project.member.controller;
 import java.util.List;
 
 import com.example.project.member.service.AdminUserService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
@@ -11,11 +12,13 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.project.member.dto.AdminUserResponse;
+import com.example.project.member.dto.AdminUserSuspendRequest;
 import com.example.project.member.domain.Users;
 import com.example.project.global.api.PaginationUtils;
 import com.example.project.security.user.Role;
@@ -64,6 +67,18 @@ public class AdminUserController {
         }
         adminUserService.deleteUserById(userId);
         return ResponseEntity.ok("삭제 완료");
+    }
+
+    @PostMapping("/suspend/{userId}")
+    public ResponseEntity<String> suspendUser(
+            @AuthenticationPrincipal Users currentUser,
+            @PathVariable("userId") Long userId,
+            @Valid @RequestBody AdminUserSuspendRequest request) {
+        if (currentUser == null || currentUser.getRole() != Role.ADMIN) {
+            return ResponseEntity.status(403).build();
+        }
+        adminUserService.suspendUserByDays(userId, request.getDays());
+        return ResponseEntity.ok(request.getDays() + "일 정지 완료");
     }
 
     @PostMapping("/restore/{userId}")
