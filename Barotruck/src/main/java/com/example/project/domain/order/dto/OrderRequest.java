@@ -51,6 +51,7 @@ public class OrderRequest {
     private String payMethod; // 결제 방식 (예: 신용카드, 계좌이체, 인수증/후불, 선불)
 
     private boolean instant; // 즉시배차 , 배정배차
+    private boolean autoDispatchLocked; // 자동배차 잠금 여부
 
     private String memo;
     private List<String> tag;

@@ -56,6 +56,7 @@ public class AdminOrderDetailResponse {
     private Long insuranceFee;
     private String payMethod;
     private boolean instant;
+    private boolean autoDispatchLocked;
     private String memo;
     private List<String> tag;
 
@@ -99,6 +100,7 @@ public class AdminOrderDetailResponse {
                 .insuranceFee(snapshot != null ? snapshot.getInsuranceFee() : null)
                 .payMethod(snapshot != null ? snapshot.getPayMethod() : null)
                 .instant(snapshot != null && snapshot.isInstant())
+                .autoDispatchLocked(snapshot != null && snapshot.isAutoDispatchLocked())
                 .memo(snapshot != null ? snapshot.getMemo() : null)
                 .tag(snapshot != null ? snapshot.getTag() : null)
                 .distance(order.getDistance())

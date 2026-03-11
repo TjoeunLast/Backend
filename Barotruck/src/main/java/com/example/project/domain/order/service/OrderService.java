@@ -15,6 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.example.project.domain.dispatch.domain.dispatchEnum.DispatchEnums.DispatchJobType;
+import com.example.project.domain.dispatch.service.availability.DispatchAvailabilityService;
+import com.example.project.domain.dispatch.service.core.DispatchOrchestratorService;
 import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.order.domain.AdminControl;
 import com.example.project.domain.order.domain.CancellationInfo;
@@ -51,6 +54,8 @@ public class OrderService {
     private final TransportPaymentService transportPaymentService;
     private final S3ImageService s3ImageService;
     private final UsersRepository usersRepository;
+    private final DispatchOrchestratorService dispatchOrchestratorService;
+    private final DispatchAvailabilityService dispatchAvailabilityService;
 
     /**
      * 1. 화주: 오더 생성 (C)
@@ -79,6 +84,9 @@ public class OrderService {
         Order order = Order.createOrder(user, request);
 
         Order savedOrder = orderRepository.save(order);
+        if (!isAutoDispatchLocked(savedOrder)) {
+            startAutoDispatchSafely(savedOrder.getOrderId(), false, "order_created");
+        }
         return convertToResponse(savedOrder);
     }
 
@@ -101,6 +109,8 @@ public class OrderService {
             if (order.getSnapshot().isInstant()) {
                 order.assignDriver(driverNo, "ACCEPTED");
                 orderRepository.save(order);
+                cancelActiveDispatchSafely(order.getOrderId(), "manual_driver_accept");
+                markDriverMatchedSafely(driverNo, order.getOrderId(), order.getStatus());
                 // [추가] 오더에 배차 완료 알림 발송 (화주에게)
                 notificationService.sendNotification(
                         order.getUser(), // 화주(Shipper)
@@ -232,6 +242,8 @@ public class OrderService {
 
         order.setAdminControl(control); // Order 내부의 편의 메서드 활용
         orderRepository.save(order);
+        cancelActiveDispatchSafely(order.getOrderId(), "admin_force_allocate");
+        markDriverMatchedSafely(driverId, order.getOrderId(), order.getStatus());
     }
 
     /**
@@ -281,6 +293,8 @@ public class OrderService {
                 .orElseThrow(() -> new RuntimeException("오더를 찾을 수 없습니다."));
 
         String role = determineCancelRole(order, currentUser);
+        Long previousDriverNo = order.getDriverNo();
+        String previousStatus = order.getStatus();
 
         // 1. 상태별 취소 가능 여부 체크
         validateCancelCondition(order, role);
@@ -295,6 +309,7 @@ public class OrderService {
         } else if ("DRIVER".equals(role)) {
             // 이미 확정된 기사가 취소: 오더를 다시 REQUESTED로 초기화
             order.assignDriver(null, "REQUESTED");
+            order.getDriverList().clear();
         } else {
             // 화주나 관리자가 취소한 경우: 아예 종료 상태로 변경
             String newStatus = "CANCELLED_BY_" + role;
@@ -313,14 +328,24 @@ public class OrderService {
         orderRepository.save(order);
 
         if ("DRIVER".equals(role)) {
+            releaseDriverSafely(previousDriverNo, order.getOrderId());
+            DispatchJobType retryJobType = resolveRetryJobType(previousStatus);
+            if (retryJobType != null && !isAutoDispatchLocked(order)) {
+                retryDispatchSafely(order.getOrderId(), retryJobType, "DRIVER_CANCELLED");
+            }
             sendOrderNotificationSafely(
                     order.getUser(),
                     "차주 배차 취소",
                     "배정된 차주가 주문을 취소했습니다.",
                     order.getOrderId());
-        } else if ("USER".equals(role) && order.getDriverNo() != null) {
+        } else {
+            cancelActiveDispatchSafely(order.getOrderId(), "order_cancelled");
+            releaseDriverSafely(previousDriverNo, order.getOrderId());
+        }
+
+        if ("USER".equals(role) && previousDriverNo != null) {
             sendOrderNotificationSafely(
-                    order.getDriverNo(),
+                    previousDriverNo,
                     "주문 취소",
                     "화주가 주문을 취소했습니다.",
                     order.getOrderId());
@@ -394,6 +419,7 @@ public class OrderService {
         System.out.println("엔티티 상태 변경 후: " + order.getStatus());
 
         Order savedOrder = orderRepository.save(order);
+        syncDriverAvailabilityAfterStatusChange(savedOrder);
 
         if ("COMPLETED".equals(normalizedStatus)) {
             try {
@@ -560,6 +586,9 @@ public class OrderService {
 
         // 4. 선택되지 않은 나머지 신청자 명단은 비워주기 (선택 사항)
         order.getDriverList().clear();
+        orderRepository.save(order);
+        cancelActiveDispatchSafely(order.getOrderId(), "shipper_selected_driver");
+        markDriverMatchedSafely(selectedDriverNo, order.getOrderId(), order.getStatus());
 
         sendOrderNotificationSafely(
                 selectedDriverNo,
@@ -681,6 +710,97 @@ public class OrderService {
         }
     }
 
+    private void startAutoDispatchSafely(Long orderId, boolean forceRebuild, String reason) {
+        try {
+            dispatchOrchestratorService.startAutoDispatch(orderId, forceRebuild, reason);
+        } catch (Exception e) {
+            System.out.println("자동배차 시작 실패: " + e.getMessage());
+        }
+    }
+
+    private void retryDispatchSafely(Long orderId, DispatchJobType jobType, String reasonCode) {
+        try {
+            dispatchOrchestratorService.retryDispatch(orderId, jobType, reasonCode);
+        } catch (Exception e) {
+            System.out.println("자동배차 재시도 실패: " + e.getMessage());
+        }
+    }
+
+    private void cancelActiveDispatchSafely(Long orderId, String reason) {
+        try {
+            dispatchOrchestratorService.cancelActiveDispatch(orderId, reason);
+        } catch (Exception e) {
+            System.out.println("자동배차 종료 실패: " + e.getMessage());
+        }
+    }
+
+    private void markDriverMatchedSafely(Long driverUserId, Long orderId, String orderStatus) {
+        try {
+            dispatchAvailabilityService.markMatched(driverUserId, orderId, orderStatus);
+        } catch (Exception e) {
+            System.out.println("차주 가용상태 매칭 반영 실패: " + e.getMessage());
+        }
+    }
+
+    private void syncDriverBusySafely(Long driverUserId, Long orderId, String orderStatus) {
+        try {
+            dispatchAvailabilityService.syncBusyOrder(driverUserId, orderId, orderStatus);
+        } catch (Exception e) {
+            System.out.println("차주 가용상태 동기화 실패: " + e.getMessage());
+        }
+    }
+
+    private void releaseDriverSafely(Long driverUserId, Long orderId) {
+        try {
+            dispatchAvailabilityService.markOrderReleased(driverUserId, orderId);
+        } catch (Exception e) {
+            System.out.println("차주 가용상태 해제 실패: " + e.getMessage());
+        }
+    }
+
+    private void syncDriverAvailabilityAfterStatusChange(Order order) {
+        if (order == null || order.getDriverNo() == null || order.getStatus() == null) {
+            return;
+        }
+        switch (order.getStatus()) {
+            case "ALLOCATED":
+            case "ACCEPTED":
+                markDriverMatchedSafely(order.getDriverNo(), order.getOrderId(), order.getStatus());
+                break;
+            case "LOADING":
+            case "IN_TRANSIT":
+            case "UNLOADING":
+                syncDriverBusySafely(order.getDriverNo(), order.getOrderId(), order.getStatus());
+                break;
+            case "COMPLETED":
+                releaseDriverSafely(order.getDriverNo(), order.getOrderId());
+                break;
+            default:
+                break;
+        }
+    }
+
+    private DispatchJobType resolveRetryJobType(String previousStatus) {
+        if (previousStatus == null || previousStatus.isBlank()) {
+            return DispatchJobType.REASSIGN;
+        }
+        if ("LOADING".equalsIgnoreCase(previousStatus) || "UNLOADING".equalsIgnoreCase(previousStatus)) {
+            return DispatchJobType.RESCUE;
+        }
+        if ("ACCEPTED".equalsIgnoreCase(previousStatus)
+                || "ALLOCATED".equalsIgnoreCase(previousStatus)
+                || "REQUESTED".equalsIgnoreCase(previousStatus)) {
+            return DispatchJobType.REASSIGN;
+        }
+        return null;
+    }
+
+    private boolean isAutoDispatchLocked(Order order) {
+        return order != null
+                && order.getSnapshot() != null
+                && order.getSnapshot().isAutoDispatchLocked();
+    }
+
     private OrderResponse convertToResponse(Order order) {
         // 1. Embedded 객체 추출
         OrderSnapshot snapshot = order.getSnapshot();
@@ -740,6 +860,7 @@ public class OrderService {
                 .insuranceFee(snapshot.getInsuranceFee())
                 .payMethod(snapshot.getPayMethod())
                 .instant(snapshot.isInstant())
+                .autoDispatchLocked(snapshot.isAutoDispatchLocked())
                 .memo(snapshot.getMemo())
                 .tag(tags)
 

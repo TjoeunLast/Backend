@@ -76,6 +76,7 @@ public class OrderResponse {
     private String payMethod;
 
     private boolean instant; // 즉시배차 , 배정배차
+    private boolean autoDispatchLocked;
     private String memo;
     private List<String> tag;
 
@@ -147,6 +148,7 @@ public class OrderResponse {
                 .insuranceFee(s.getInsuranceFee())
                 .payMethod(s.getPayMethod())
                 .instant(s.isInstant())
+                .autoDispatchLocked(s.isAutoDispatchLocked())
                 .memo(s.getMemo())
                 .tag(s.getTag() == null ? new ArrayList<>() : new ArrayList<>(s.getTag()))
                 .startNbhId(s.getStartNbhId())
