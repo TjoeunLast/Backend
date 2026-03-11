@@ -22,6 +22,7 @@ import com.example.project.domain.payment.dto.paymentResponse.PaymentRetryQueueS
 import com.example.project.domain.payment.repository.DriverPayoutBatchRepository;
 import com.example.project.domain.payment.repository.DriverPayoutItemRepository;
 import com.example.project.domain.payment.repository.FeeAutoChargeAttemptRepository;
+import com.example.project.domain.payment.repository.FeeInvoiceItemRepository;
 import com.example.project.domain.payment.repository.FeeInvoiceRepository;
 import com.example.project.domain.payment.repository.PaymentDisputeRepository;
 import com.example.project.domain.payment.repository.PaymentGatewayTransactionRepository;
@@ -41,7 +42,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -51,6 +56,7 @@ public class AdminPaymentStatusQueryService {
 
     private final PaymentDisputeRepository paymentDisputeRepository;
     private final FeeInvoiceRepository feeInvoiceRepository;
+    private final FeeInvoiceItemRepository feeInvoiceItemRepository;
     private final ShipperBillingAgreementRepository shipperBillingAgreementRepository;
     private final FeeAutoChargeAttemptRepository feeAutoChargeAttemptRepository;
     private final DriverPayoutBatchRepository driverPayoutBatchRepository;
@@ -75,7 +81,16 @@ public class AdminPaymentStatusQueryService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "fee invoice not found. shipperUserId=" + shipperUserId + ", period=" + period
                 ));
-        return FeeInvoiceStatusResponse.from(invoice);
+
+        var items = feeInvoiceItemRepository.findAllByInvoiceId(invoice.getInvoiceId());
+        Map<Long, TransportPayment> paymentsByOrderId = items.isEmpty()
+                ? Collections.emptyMap()
+                : transportPaymentRepository.findAllByOrderIdIn(
+                                items.stream().map(item -> item.getOrderId()).toList()
+                        )
+                        .stream()
+                        .collect(Collectors.toMap(TransportPayment::getOrderId, Function.identity(), (left, right) -> left));
+        return FeeInvoiceStatusResponse.from(invoice, items, paymentsByOrderId);
     }
 
     public AdminBillingAgreementStatusResponse getBillingAgreementStatus(Long shipperUserId) {
@@ -139,6 +154,7 @@ public class AdminPaymentStatusQueryService {
     public DriverPayoutItemStatusResponse getPayoutItemStatusByOrderId(Long orderId) {
         var item = driverPayoutItemRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("payout item not found. orderId=" + orderId));
+        TransportPayment payment = transportPaymentRepository.findByOrderId(orderId).orElse(null);
 
         Driver driver = driverRepository.findByUser_UserId(item.getDriverUserId()).orElse(null);
         PaymentGatewayWebhookEvent latestPayoutWebhook = findLatestPayoutWebhook(item);
@@ -148,6 +164,7 @@ public class AdminPaymentStatusQueryService {
 
         return DriverPayoutItemStatusResponse.from(
                 item,
+                payment,
                 driver,
                 latestWebhook,
                 webhookStatus,

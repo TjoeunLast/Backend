@@ -15,6 +15,7 @@ package com.example.project.domain.payment.port.impl;
  */
 
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.project.domain.payment.port.UserPort;
 import com.example.project.member.domain.Users;
@@ -46,17 +47,28 @@ public class JpaUserPort implements UserPort {
      * - 결제에 필요한 최소 정보만 전달한다.
      */
     @Override
+    @Transactional(readOnly = true)
     public UserInfo getRequiredUser(Long userId) {
+        return toUserInfo(
+                usersRepository.findById(userId)
+                        .orElseThrow(() -> new IllegalArgumentException("user not found: " + userId))
+        );
+    }
 
-        // 1️⃣ 유저 조회 (없으면 예외)
-        Users user = usersRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("user not found: " + userId));
+    @Override
+    @Transactional
+    public UserInfo lockRequiredUser(Long userId) {
+        return toUserInfo(
+                usersRepository.findByIdForUpdate(userId)
+                        .orElseThrow(() -> new IllegalArgumentException("user not found: " + userId))
+        );
+    }
 
-        // 2️⃣ 레벨 기본값 처리
+    private UserInfo toUserInfo(Users user) {
         Long level = user.getUser_level();
-        if (level == null) level = 1L;
-
-        // 3️⃣ 결제 도메인 전용 DTO로 변환
+        if (level == null) {
+            level = 0L;
+        }
         return new UserInfo(user.getUserId(), level);
     }
 }

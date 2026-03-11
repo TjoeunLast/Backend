@@ -1,8 +1,8 @@
 package com.example.project.domain.payment.dto.paymentRequest;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -10,33 +10,62 @@ import java.math.BigDecimal;
 @Data
 public class UpdateFeePolicyRequest {
 
-    @NotNull
+    @Valid
+    private FeePolicySideRequest shipperSide;
+
+    @Valid
+    private FeePolicySideRequest driverSide;
+
+    @DecimalMin("0.0000")
+    @DecimalMax("1.0000")
+    private BigDecimal shipperFirstPaymentPromoRate;
+
+    @DecimalMin("0.0000")
+    @DecimalMax("1.0000")
+    private BigDecimal driverFirstTransportPromoRate;
+
+    @DecimalMin("0.0000")
+    @DecimalMax("1.0000")
+    private BigDecimal tossRate;
+
+    @DecimalMin("0.00")
+    private BigDecimal minFee;
+
     @DecimalMin("0.0000")
     @DecimalMax("1.0000")
     private BigDecimal level0Rate;
 
-    @NotNull
     @DecimalMin("0.0000")
     @DecimalMax("1.0000")
     private BigDecimal level1Rate;
 
-    @NotNull
     @DecimalMin("0.0000")
     @DecimalMax("1.0000")
     private BigDecimal level2Rate;
 
-    @NotNull
     @DecimalMin("0.0000")
     @DecimalMax("1.0000")
     private BigDecimal level3PlusRate;
 
-    @NotNull
     @DecimalMin("0.0000")
     @DecimalMax("1.0000")
     private BigDecimal firstPaymentPromoRate;
 
-    @NotNull
-    @DecimalMin("0.00")
-    private BigDecimal minFee;
-}
+    public boolean hasAnyUpdates() {
+        return minFee != null
+                || shipperFirstPaymentPromoRate != null
+                || driverFirstTransportPromoRate != null
+                || tossRate != null
+                || hasLegacyShipperRateUpdates()
+                || (shipperSide != null && shipperSide.hasAnyRate())
+                || (driverSide != null && driverSide.hasAnyRate());
+    }
 
+    public boolean hasLegacyShipperRateUpdates() {
+        return level0Rate != null
+                || level1Rate != null
+                || level2Rate != null
+                || level3PlusRate != null
+                || firstPaymentPromoRate != null;
+    }
+}

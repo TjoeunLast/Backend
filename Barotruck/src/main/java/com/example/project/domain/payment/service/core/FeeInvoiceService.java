@@ -5,10 +5,10 @@ import com.example.project.domain.payment.domain.FeeInvoiceItem;
 import com.example.project.domain.payment.domain.TransportPayment;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
+import com.example.project.domain.payment.repository.FeeInvoiceItemRepository;
 import com.example.project.domain.payment.repository.FeeInvoiceRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.member.domain.Users;
-import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,8 +23,8 @@ import java.util.List;
 public class FeeInvoiceService {
 
     private final FeeInvoiceRepository feeInvoiceRepository;
+    private final FeeInvoiceItemRepository feeInvoiceItemRepository;
     private final TransportPaymentRepository transportPaymentRepository;
-    private final EntityManager entityManager;
 
     @Transactional
     public FeeInvoice generateForShipper(Long shipperUserId, YearMonth period) {
@@ -57,8 +57,8 @@ public class FeeInvoiceService {
 
             if (p.getStatus() != TransportPaymentStatus.PAID && p.getStatus() != TransportPaymentStatus.CONFIRMED) continue;
 
-            if (!existsInvoiceItem(invoice.getInvoiceId(), p.getOrderId())) {
-                entityManager.persist(FeeInvoiceItem.of(invoice.getInvoiceId(), p.getOrderId(), p.getFeeAmountSnapshot()));
+            if (!feeInvoiceItemRepository.existsByInvoiceIdAndOrderId(invoice.getInvoiceId(), p.getOrderId())) {
+                feeInvoiceItemRepository.save(FeeInvoiceItem.of(invoice.getInvoiceId(), p));
             }
 
             total = total.add(p.getFeeAmountSnapshot());
@@ -88,16 +88,5 @@ public class FeeInvoiceService {
 
         invoice.markPaid();
         return feeInvoiceRepository.save(invoice);
-    }
-
-    private boolean existsInvoiceItem(Long invoiceId, Long orderId) {
-        Long count = entityManager.createQuery(
-                        "select count(i) from FeeInvoiceItem i where i.invoiceId = :invoiceId and i.orderId = :orderId",
-                        Long.class
-                )
-                .setParameter("invoiceId", invoiceId)
-                .setParameter("orderId", orderId)
-                .getSingleResult();
-        return count != null && count > 0;
     }
 }

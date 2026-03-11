@@ -9,8 +9,14 @@ import java.time.LocalDateTime;
 public record LevelFeePolicyResponse(
         Long requestedLevel,
         Long appliedLevel,
+        String side,
         BigDecimal rate,
         BigDecimal firstPaymentPromoRate,
+        BigDecimal shipperRate,
+        BigDecimal driverRate,
+        BigDecimal shipperFirstPaymentPromoRate,
+        BigDecimal driverFirstTransportPromoRate,
+        BigDecimal tossRate,
         BigDecimal minFee,
         LocalDateTime updatedAt
 ) {

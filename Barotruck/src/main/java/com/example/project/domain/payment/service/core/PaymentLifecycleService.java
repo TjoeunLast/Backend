@@ -4,11 +4,12 @@ import com.example.project.domain.order.domain.Order;
 import com.example.project.domain.notification.service.NotificationService;
 import com.example.project.domain.payment.domain.PaymentGatewayTransaction;
 import com.example.project.domain.payment.domain.TransportPayment;
+import com.example.project.domain.payment.domain.TransportPaymentPricingSnapshot;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentMethod;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.PaymentTiming;
 import com.example.project.domain.payment.domain.paymentEnum.PaymentEnums.TransportPaymentStatus;
+import com.example.project.domain.payment.dto.paymentResponse.FeeBreakdownPreviewResponse;
 import com.example.project.domain.payment.port.OrderPort;
-import com.example.project.domain.payment.port.UserPort;
 import com.example.project.domain.payment.repository.DriverPayoutItemRepository;
 import com.example.project.domain.payment.repository.TransportPaymentRepository;
 import com.example.project.domain.settlement.domain.Settlement;
@@ -22,8 +23,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -32,8 +33,7 @@ public class PaymentLifecycleService {
 
     private final TransportPaymentRepository transportPaymentRepository;
     private final OrderPort orderPort;
-    private final UserPort userPort;
-    private final FeePolicyService feePolicyService;
+    private final MarketplaceFeeCalculationService marketplaceFeeCalculationService;
     private final SettlementRepository settlementRepository;
     private final DriverPayoutItemRepository driverPayoutItemRepository;
     private final DriverPayoutService driverPayoutService;
@@ -61,43 +61,30 @@ public class PaymentLifecycleService {
             throw new IllegalStateException("assigned driver not found");
         }
 
-        Long userLevel = userPort.getRequiredUser(snap.shipperUserId()).userLevel();
-        boolean firstPaymentPromoEligible =
-                transportPaymentRepository.countByShipperUserIdAndStatusIn(
-                        snap.shipperUserId(),
-                        paidOrConfirmedStatuses()
-                ) == 0;
-
-        FeePolicyService.FeeResult fee = feePolicyService.calculate(
-                snap.amount(),
-                userLevel,
-                firstPaymentPromoEligible
-        );
-
         TransportPayment transportPayment = requireInitializedPayment(orderId);
         PaymentMethod effectiveMethod = resolveManualPaymentMethod(method, transportPayment);
         validateManualPaymentProof(effectiveMethod, proofUrl);
-        transportPayment.applyPricingSnapshots(
-                fee.chargedAmount(),
-                fee.feeRate(),
-                fee.feeAmount(),
-                fee.driverAmount()
-        );
-        boolean shouldNotifyDriver = transportPayment.getStatus() != TransportPaymentStatus.PAID
-                && transportPayment.getStatus() != TransportPaymentStatus.CONFIRMED
-                && transportPayment.getStatus() != TransportPaymentStatus.ADMIN_FORCE_CONFIRMED;
-
         if (transportPayment.getStatus() == TransportPaymentStatus.CONFIRMED
                 || transportPayment.getStatus() == TransportPaymentStatus.ADMIN_FORCE_CONFIRMED) {
             return transportPayment;
         }
+        if (transportPayment.getStatus() == TransportPaymentStatus.PAID) {
+            upsertSettlementOnPaid(orderId, snap.shipperUserId(), transportPayment);
+            return transportPayment;
+        }
 
+        recalculatePricingSnapshot(orderId, transportPayment, snap.amount(), null, false);
+        boolean shouldNotifyDriver = transportPayment.getStatus() != TransportPaymentStatus.PAID
+                && transportPayment.getStatus() != TransportPaymentStatus.CONFIRMED
+                && transportPayment.getStatus() != TransportPaymentStatus.ADMIN_FORCE_CONFIRMED;
+
+        transportPayment.applyMethod(effectiveMethod);
         transportPayment.applyPaymentTiming(resolvePaymentTiming(paymentTiming));
         transportPayment.markPaid(proofUrl, paidAt);
         orderPort.setOrderPaid(orderId);
 
         TransportPayment saved = transportPaymentRepository.save(transportPayment);
-        upsertSettlementOnPaid(orderId, snap.shipperUserId(), snap.amount(), fee);
+        upsertSettlementOnPaid(orderId, snap.shipperUserId(), saved);
         if (shouldNotifyDriver) {
             sendPaymentNotificationSafely(
                     snap.driverUserId(),
@@ -149,28 +136,7 @@ public class PaymentLifecycleService {
         }
         validatePaymentStartOrderStatus(snap.status());
 
-        Long userLevel = userPort.getRequiredUser(snap.shipperUserId()).userLevel();
-        boolean firstPaymentPromoEligible =
-                transportPaymentRepository.countByShipperUserIdAndStatusIn(
-                        snap.shipperUserId(),
-                        paidOrConfirmedStatuses()
-                ) == 0;
-        FeePolicyService.FeeResult fee = feePolicyService.calculate(
-                snap.amount(),
-                userLevel,
-                firstPaymentPromoEligible
-        );
-
         TransportPayment payment = requireInitializedPayment(tx.getOrderId());
-
-        payment.applyPaymentTiming(resolveGatewayPaymentTiming(tx));
-        payment.applyPricingSnapshots(
-                tx.getAmount(),
-                fee.feeRate(),
-                fee.feeAmount(),
-                fee.driverAmount()
-        );
-
         if (payment.getStatus() == TransportPaymentStatus.CANCELLED) {
             throw new IllegalStateException("cannot mark paid for cancelled payment");
         }
@@ -182,7 +148,7 @@ public class PaymentLifecycleService {
             return payment;
         }
         if (payment.getStatus() == TransportPaymentStatus.PAID) {
-            upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), snap.amount(), fee);
+            upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), payment);
             orderPort.setOrderPaid(tx.getOrderId());
             if (shouldAutoConfirmGatewayPayment(tx, payment)) {
                 return confirmPaymentAndTriggerPayout(
@@ -196,13 +162,16 @@ public class PaymentLifecycleService {
             return payment;
         }
 
+        recalculatePricingSnapshot(tx.getOrderId(), payment, snap.amount(), tx.getAmount(), true);
+        payment.applyPaymentTiming(resolveGatewayPaymentTiming(tx));
+
         String pgReference = firstNonBlank(tx.getTransactionId(), tx.getPaymentKey(), tx.getPgOrderId());
-        payment.markPaid(pgReference, LocalDateTime.now());
+        payment.markPaid(pgReference, firstNonNull(tx.getApprovedAt(), LocalDateTime.now()));
         payment.setPgTid(pgReference);
         orderPort.setOrderPaid(tx.getOrderId());
 
         TransportPayment saved = transportPaymentRepository.save(payment);
-        upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), snap.amount(), fee);
+        upsertSettlementOnPaid(tx.getOrderId(), snap.shipperUserId(), saved);
         if (shouldAutoConfirmGatewayPayment(tx, saved)) {
             return confirmPaymentAndTriggerPayout(
                     saved,
@@ -237,7 +206,7 @@ public class PaymentLifecycleService {
         orderPort.setOrderConfirmed(orderId);
 
         TransportPayment saved = transportPaymentRepository.save(payment);
-        completeSettlementOnConfirm(orderId);
+        completeSettlementOnConfirm(saved);
         driverPayoutService.tryAutoRequestPayoutForOrder(orderId, payoutTriggerSource);
         sendPaymentNotificationSafely(
                 payment.getShipperUserId(),
@@ -275,30 +244,25 @@ public class PaymentLifecycleService {
             return null;
         }
 
-        Long userLevel = userPort.getRequiredUser(snap.shipperUserId()).userLevel();
-        boolean firstPaymentPromoEligible =
-                transportPaymentRepository.countByShipperUserIdAndStatusIn(
-                        snap.shipperUserId(),
-                        paidOrConfirmedStatuses()
-                ) == 0;
-
-        FeePolicyService.FeeResult fee = feePolicyService.calculate(
+        TransportPaymentPricingSnapshot pricingSnapshot = previewPricingSnapshot(
+                orderId,
                 snap.amount(),
-                userLevel,
-                firstPaymentPromoEligible
+                null,
+                orderMethod == PaymentMethod.CARD
         );
 
         TransportPayment readyPayment = TransportPayment.ready(
                 orderId,
                 snap.shipperUserId(),
                 snap.driverUserId(),
-                fee.chargedAmount(),
-                fee.feeRate(),
-                fee.feeAmount(),
-                fee.driverAmount(),
+                pricingSnapshot.actualPaidAmount(),
+                pricingSnapshot.shipperFeeRate(),
+                pricingSnapshot.shipperFeeAmount(),
+                pricingSnapshot.driverPayoutAmount(),
                 orderMethod,
                 PaymentTiming.POSTPAID
         );
+        readyPayment.applyPricingSnapshot(pricingSnapshot);
 
         return transportPaymentRepository.save(readyPayment);
     }
@@ -350,10 +314,7 @@ public class PaymentLifecycleService {
         return saved;
     }
 
-    private void upsertSettlementOnPaid(Long orderId, Long shipperUserId, BigDecimal grossAmount, FeePolicyService.FeeResult fee) {
-        long totalPrice = grossAmount.longValue();
-        long feeRatePercent = fee.feeRate().multiply(new BigDecimal("100")).longValue();
-
+    private void upsertSettlementOnPaid(Long orderId, Long shipperUserId, TransportPayment payment) {
         Settlement settlement = settlementRepository.findByOrderId(orderId)
                 .orElseGet(() -> {
                     Order orderRef = entityManager.getReference(Order.class, orderId);
@@ -366,18 +327,30 @@ public class PaymentLifecycleService {
 
         settlement.setLevelDiscount(0L);
         settlement.setCouponDiscount(0L);
-        settlement.setTotalPrice(totalPrice);
-        settlement.setFeeRate(feeRatePercent);
+        settlement.applyPricingSnapshot(TransportPaymentPricingSnapshot.from(payment));
         settlement.setStatus(SettlementStatus.READY);
-        settlement.setFeeDate(LocalDateTime.now());
+        settlement.setFeeDate(firstNonNull(payment.getPaidAt(), LocalDateTime.now()));
         settlementRepository.save(settlement);
     }
 
-    private void completeSettlementOnConfirm(Long orderId) {
+    private void completeSettlementOnConfirm(TransportPayment payment) {
+        Long orderId = payment.getOrderId();
         Settlement settlement = settlementRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalStateException("settlement not found. orderId=" + orderId));
+                .orElseGet(() -> {
+                    Order orderRef = entityManager.getReference(Order.class, orderId);
+                    Users userRef = entityManager.getReference(Users.class, payment.getShipperUserId());
+                    return Settlement.builder()
+                            .order(orderRef)
+                            .user(userRef)
+                            .build();
+                });
 
+        settlement.setLevelDiscount(defaultLong(settlement.getLevelDiscount()));
+        settlement.setCouponDiscount(defaultLong(settlement.getCouponDiscount()));
+        settlement.applyPricingSnapshot(TransportPaymentPricingSnapshot.from(payment));
+        settlement.setFeeDate(firstNonNull(settlement.getFeeDate(), payment.getPaidAt(), LocalDateTime.now()));
         settlement.setStatus(SettlementStatus.COMPLETED);
+        settlement.setFeeCompleteDate(firstNonNull(payment.getConfirmedAt(), LocalDateTime.now()));
         settlementRepository.save(settlement);
     }
 
@@ -408,14 +381,6 @@ public class PaymentLifecycleService {
             }
         }
         return null;
-    }
-
-    private List<TransportPaymentStatus> paidOrConfirmedStatuses() {
-        return List.of(
-                TransportPaymentStatus.PAID,
-                TransportPaymentStatus.CONFIRMED,
-                TransportPaymentStatus.ADMIN_FORCE_CONFIRMED
-        );
     }
 
     private PaymentTiming resolvePaymentTiming(PaymentTiming paymentTiming) {
@@ -483,6 +448,89 @@ public class PaymentLifecycleService {
         if (snap.shipperUserId() == null || !snap.shipperUserId().equals(currentUser.getUserId())) {
             throw new IllegalStateException("shipper can pay only own order");
         }
+    }
+
+    private TransportPaymentPricingSnapshot previewPricingSnapshot(
+            Long orderId,
+            BigDecimal baseAmount,
+            BigDecimal actualPaidAmount,
+            boolean includeTossFee
+    ) {
+        FeeBreakdownPreviewResponse breakdown = marketplaceFeeCalculationService.calculate(
+                MarketplaceFeeCalculationService.CalculationCommand.builder()
+                        .orderId(orderId)
+                        .baseAmount(baseAmount)
+                        .includeTossFee(includeTossFee)
+                        .build()
+        );
+        return toPricingSnapshot(breakdown, actualPaidAmount);
+    }
+
+    private TransportPaymentPricingSnapshot recalculatePricingSnapshot(
+            Long orderId,
+            TransportPayment payment,
+            BigDecimal baseAmount,
+            BigDecimal actualPaidAmount,
+            boolean includeTossFee
+    ) {
+        TransportPaymentPricingSnapshot snapshot =
+                previewPricingSnapshot(orderId, baseAmount, actualPaidAmount, includeTossFee);
+        payment.applyPricingSnapshot(snapshot);
+        return snapshot;
+    }
+
+    private TransportPaymentPricingSnapshot toPricingSnapshot(
+            FeeBreakdownPreviewResponse breakdown,
+            BigDecimal actualPaidAmount
+    ) {
+        BigDecimal resolvedActualPaidAmount =
+                actualPaidAmount == null
+                        ? firstNonNull(breakdown.shipperChargeAmount(), BigDecimal.ZERO)
+                        : actualPaidAmount;
+
+        return new TransportPaymentPricingSnapshot(
+                scaleAmount(resolvedActualPaidAmount),
+                scaleAmount(breakdown.baseAmount()),
+                scaleRate(breakdown.shipperFeeRate()),
+                scaleAmount(breakdown.shipperFeeAmount()),
+                breakdown.shipperPromoApplied(),
+                scaleAmount(breakdown.shipperChargeAmount()),
+                scaleRate(breakdown.driverFeeRate()),
+                scaleAmount(breakdown.driverFeeAmount()),
+                breakdown.driverPromoApplied(),
+                scaleAmount(breakdown.driverPayoutAmount()),
+                scaleRate(breakdown.tossFeeRate()),
+                scaleAmount(breakdown.tossFeeAmount()),
+                scaleAmount(breakdown.platformGrossRevenue()),
+                scaleAmount(breakdown.platformNetRevenue()),
+                null,
+                breakdown.policyUpdatedAt()
+        );
+    }
+
+    private BigDecimal scaleAmount(BigDecimal value) {
+        return firstNonNull(value, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal scaleRate(BigDecimal value) {
+        return firstNonNull(value, BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private Long defaultLong(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    @SafeVarargs
+    private final <T> T firstNonNull(T... values) {
+        if (values == null) {
+            return null;
+        }
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private void validatePaymentStartOrderStatus(String orderStatus) {

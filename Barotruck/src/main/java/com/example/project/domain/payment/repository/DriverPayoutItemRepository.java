@@ -12,6 +12,8 @@ public interface DriverPayoutItemRepository extends JpaRepository<DriverPayoutIt
     Optional<DriverPayoutItem> findByOrderId(Long orderId);
     Optional<DriverPayoutItem> findByPayoutRef(String payoutRef);
     boolean existsByOrderId(Long orderId);
+    boolean existsByDriverUserIdAndFirstTransportPromoAppliedTrueAndOrderIdNot(Long driverUserId, Long orderId);
+    long countByDriverUserId(Long driverUserId);
 
     List<DriverPayoutItem> findAllByStatusIn(List<PayoutStatus> statuses);
 

@@ -50,6 +50,33 @@ public class DriverPayoutItem {
     @Column(name = "NET_AMOUNT", nullable = false, precision = 18, scale = 2)
     private BigDecimal netAmount;
 
+    @Column(name = "SHIPPER_CHARGE_AMOUNT", precision = 18, scale = 2)
+    private BigDecimal shipperChargeAmount;
+
+    @Column(name = "SHIPPER_FEE_RATE", precision = 6, scale = 4)
+    private BigDecimal shipperFeeRate;
+
+    @Column(name = "SHIPPER_FEE_AMOUNT", precision = 18, scale = 2)
+    private BigDecimal shipperFeeAmount;
+
+    @Column(name = "DRIVER_FEE_RATE", precision = 6, scale = 4)
+    private BigDecimal driverFeeRate;
+
+    @Column(name = "DRIVER_FEE_AMOUNT", precision = 18, scale = 2)
+    private BigDecimal driverFeeAmount;
+
+    @Column(name = "TOSS_FEE_RATE", precision = 6, scale = 4)
+    private BigDecimal tossFeeRate;
+
+    @Column(name = "TOSS_FEE_AMOUNT", precision = 18, scale = 2)
+    private BigDecimal tossFeeAmount;
+
+    @Column(name = "PLATFORM_GROSS_REVENUE", precision = 18, scale = 2)
+    private BigDecimal platformGrossRevenue;
+
+    @Column(name = "PLATFORM_NET_REVENUE", precision = 18, scale = 2)
+    private BigDecimal platformNetRevenue;
+
     // 지급 상태
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS", nullable = false, length = 20)
@@ -75,6 +102,9 @@ public class DriverPayoutItem {
     @Column(name = "PAYOUT_REF", length = 200)
     private String payoutRef;
 
+    @Column(name = "FIRST_TRANSPORT_PROMO_APPLIED", nullable = false, columnDefinition = "NUMBER(1,0) DEFAULT 0")
+    private boolean firstTransportPromoApplied;
+
     @PrePersist
     void onCreate() {
         if (this.status == null) {
@@ -86,12 +116,21 @@ public class DriverPayoutItem {
     }
 
     // 지급 준비 상태 생성
-    public static DriverPayoutItem ready(DriverPayoutBatch batch, Long orderId, Long driverUserId, BigDecimal netAmount) {
+    public static DriverPayoutItem ready(DriverPayoutBatch batch, TransportPayment payment) {
         return DriverPayoutItem.builder()
                 .batch(batch)
-                .orderId(orderId)
-                .driverUserId(driverUserId)
-                .netAmount(netAmount)
+                .orderId(payment.getOrderId())
+                .driverUserId(payment.getDriverUserId())
+                .netAmount(payment.getDriverPayoutAmountSnapshot())
+                .shipperChargeAmount(payment.getShipperChargeAmountSnapshot())
+                .shipperFeeRate(payment.getShipperFeeRateSnapshot())
+                .shipperFeeAmount(payment.getShipperFeeAmountSnapshot())
+                .driverFeeRate(payment.getDriverFeeRateSnapshot())
+                .driverFeeAmount(payment.getDriverFeeAmountSnapshot())
+                .tossFeeRate(payment.getTossFeeRateSnapshot())
+                .tossFeeAmount(payment.getTossFeeAmountSnapshot())
+                .platformGrossRevenue(payment.getPlatformGrossRevenueSnapshot())
+                .platformNetRevenue(payment.getPlatformNetRevenueSnapshot())
                 .status(PayoutStatus.READY)
                 .retryCount(0)
                 .build();
@@ -138,5 +177,13 @@ public class DriverPayoutItem {
     public void markRetrying() {
         this.status = PayoutStatus.RETRYING;
         this.requestedAt = LocalDateTime.now();
+    }
+
+    public void applyFirstTransportPromo(boolean applied) {
+        this.firstTransportPromoApplied = applied;
+    }
+
+    public BigDecimal getDriverPayoutAmount() {
+        return netAmount;
     }
 }

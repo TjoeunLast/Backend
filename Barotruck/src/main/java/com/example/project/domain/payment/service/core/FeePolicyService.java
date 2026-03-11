@@ -1,9 +1,11 @@
 package com.example.project.domain.payment.service.core;
 
 import com.example.project.domain.payment.domain.FeePolicyConfig;
-import com.example.project.domain.payment.dto.paymentRequest.UpdateLevelFeeRequest;
+import com.example.project.domain.payment.dto.paymentRequest.FeePolicySideRequest;
 import com.example.project.domain.payment.dto.paymentRequest.UpdateFeePolicyRequest;
+import com.example.project.domain.payment.dto.paymentRequest.UpdateLevelFeeRequest;
 import com.example.project.domain.payment.dto.paymentResponse.FeePolicyResponse;
+import com.example.project.domain.payment.dto.paymentResponse.FeePolicySideResponse;
 import com.example.project.domain.payment.dto.paymentResponse.LevelFeePolicyResponse;
 import com.example.project.domain.payment.repository.FeePolicyConfigRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,16 +15,27 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
 public class FeePolicyService {
 
-    private static final BigDecimal DEFAULT_LEVEL0_RATE = new BigDecimal("0.05");
-    private static final BigDecimal DEFAULT_LEVEL1_RATE = new BigDecimal("0.04");
-    private static final BigDecimal DEFAULT_LEVEL2_RATE = new BigDecimal("0.03");
-    private static final BigDecimal DEFAULT_LEVEL3_PLUS_RATE = new BigDecimal("0.03");
-    private static final BigDecimal DEFAULT_FIRST_PAYMENT_PROMO_RATE = new BigDecimal("0.03");
+    private static final SideRates DEFAULT_SHIPPER_SIDE_RATES = new SideRates(
+            new BigDecimal("0.0250"),
+            new BigDecimal("0.0200"),
+            new BigDecimal("0.0180"),
+            new BigDecimal("0.0150")
+    );
+    private static final SideRates DEFAULT_DRIVER_SIDE_RATES = new SideRates(
+            new BigDecimal("0.0250"),
+            new BigDecimal("0.0200"),
+            new BigDecimal("0.0180"),
+            new BigDecimal("0.0150")
+    );
+    private static final BigDecimal DEFAULT_SHIPPER_FIRST_PAYMENT_PROMO_RATE = new BigDecimal("0.0150");
+    private static final BigDecimal DEFAULT_DRIVER_FIRST_TRANSPORT_PROMO_RATE = new BigDecimal("0.0150");
+    private static final BigDecimal DEFAULT_TOSS_RATE = new BigDecimal("0.1000");
     private static final BigDecimal DEFAULT_MIN_FEE = new BigDecimal("2000.00");
 
     private final FeePolicyConfigRepository feePolicyConfigRepository;
@@ -32,20 +45,20 @@ public class FeePolicyService {
             BigDecimal feeAmount,
             BigDecimal chargedAmount,
             BigDecimal driverAmount,
-            boolean promoApplied
+            boolean promoApplied,
+            Long policyId,
+            LocalDateTime policyAppliedAt
     ) {
     }
 
     @Transactional(readOnly = true)
     public FeePolicyResponse getCurrentPolicy() {
-        ResolvedPolicy policy = resolvePolicy();
-        return toPolicyResponse(policy);
+        return toPolicyResponse(resolvePolicy());
     }
 
     @Transactional(readOnly = true)
     public LevelFeePolicyResponse getCurrentPolicyByLevel(Long level) {
-        ResolvedPolicy policy = resolvePolicy();
-        return toLevelResponse(level, policy);
+        return toLevelResponse(level, PolicySide.SHIPPER, resolvePolicy());
     }
 
     @Transactional
@@ -53,19 +66,33 @@ public class FeePolicyService {
         if (request == null) {
             throw new IllegalArgumentException("request is required");
         }
+        if (!request.hasAnyUpdates()) {
+            throw new IllegalArgumentException("at least one fee policy field is required");
+        }
 
-        FeePolicyConfig saved = feePolicyConfigRepository.save(
-                FeePolicyConfig.builder()
-                        .level0Rate(normalizeRate(request.getLevel0Rate(), "level0Rate"))
-                        .level1Rate(normalizeRate(request.getLevel1Rate(), "level1Rate"))
-                        .level2Rate(normalizeRate(request.getLevel2Rate(), "level2Rate"))
-                        .level3PlusRate(normalizeRate(request.getLevel3PlusRate(), "level3PlusRate"))
-                        .firstPaymentPromoRate(normalizeRate(request.getFirstPaymentPromoRate(), "firstPaymentPromoRate"))
-                        .minFee(normalizeMinFee(request.getMinFee()))
-                        .build()
+        ResolvedPolicy current = resolvePolicy();
+        ResolvedPolicy updated = new ResolvedPolicy(
+                mergeShipperSide(current.shipperSide(), request),
+                mergeDriverSide(current.driverSide(), request.getDriverSide()),
+                mergeRate(
+                        request.getShipperFirstPaymentPromoRate(),
+                        request.getFirstPaymentPromoRate(),
+                        current.shipperFirstPaymentPromoRate(),
+                        "shipperFirstPaymentPromoRate"
+                ),
+                mergeRate(
+                        request.getDriverFirstTransportPromoRate(),
+                        null,
+                        current.driverFirstTransportPromoRate(),
+                        "driverFirstTransportPromoRate"
+                ),
+                mergeRate(request.getTossRate(), null, current.tossRate(), "tossRate"),
+                mergeMinFee(request.getMinFee(), current.minFee()),
+                current.policyId(),
+                current.updatedAt()
         );
 
-        return toPolicyResponse(saved);
+        return toPolicyResponse(toResolvedPolicy(savePolicy(updated)));
     }
 
     @Transactional
@@ -75,54 +102,63 @@ public class FeePolicyService {
         }
 
         long appliedLevel = normalizeLevelBucket(request.getLevel());
+        PolicySide side = normalizeSide(request.getSide());
         ResolvedPolicy current = resolvePolicy();
         BigDecimal normalizedRate = normalizeRate(request.getRate(), "rate");
 
-        FeePolicyConfig saved = feePolicyConfigRepository.save(
-                FeePolicyConfig.builder()
-                        .level0Rate(appliedLevel == 0 ? normalizedRate : current.level0Rate())
-                        .level1Rate(appliedLevel == 1 ? normalizedRate : current.level1Rate())
-                        .level2Rate(appliedLevel == 2 ? normalizedRate : current.level2Rate())
-                        .level3PlusRate(appliedLevel >= 3 ? normalizedRate : current.level3PlusRate())
-                        .firstPaymentPromoRate(current.firstPaymentPromoRate())
-                        .minFee(current.minFee())
-                        .build()
+        SideRates shipperSide = current.shipperSide();
+        SideRates driverSide = current.driverSide();
+
+        if (side == PolicySide.SHIPPER) {
+            shipperSide = shipperSide.withRate(appliedLevel, normalizedRate);
+        } else {
+            driverSide = driverSide.withRate(appliedLevel, normalizedRate);
+        }
+
+        ResolvedPolicy updated = new ResolvedPolicy(
+                shipperSide,
+                driverSide,
+                current.shipperFirstPaymentPromoRate(),
+                current.driverFirstTransportPromoRate(),
+                current.tossRate(),
+                current.minFee(),
+                current.policyId(),
+                current.updatedAt()
         );
 
-        return toLevelResponse(request.getLevel(), toResolvedPolicy(saved));
+        return toLevelResponse(request.getLevel(), side, toResolvedPolicy(savePolicy(updated)));
     }
 
     public FeeResult calculate(BigDecimal amount, Long userLevel, boolean firstPaymentPromoEligible) {
         ResolvedPolicy policy = resolvePolicy();
-        BigDecimal rate = mapRate(userLevel, policy);
+        var breakdown = MarketplaceFeeMath.calculate(
+                toPolicyResponse(policy),
+                amount,
+                userLevel,
+                null,
+                firstPaymentPromoEligible,
+                false,
+                false
+        );
 
-        boolean promoApplied = false;
-        if (firstPaymentPromoEligible) {
-            rate = policy.firstPaymentPromoRate();
-            promoApplied = true;
-        }
-
-        BigDecimal fee = amount.multiply(rate).setScale(2, RoundingMode.HALF_UP);
-        if (fee.compareTo(policy.minFee()) < 0) {
-            fee = policy.minFee();
-        }
-
-        BigDecimal charged = amount.add(fee).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal driverAmount = amount.setScale(2, RoundingMode.HALF_UP);
-        return new FeeResult(rate, fee, charged, driverAmount, promoApplied);
+        return new FeeResult(
+                breakdown.shipperFeeRate(),
+                breakdown.shipperFeeAmount(),
+                breakdown.shipperChargeAmount(),
+                breakdown.baseAmount() == null
+                        ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                        : breakdown.baseAmount().setScale(2, RoundingMode.HALF_UP),
+                breakdown.shipperPromoApplied(),
+                policy.policyId(),
+                policy.updatedAt()
+        );
     }
 
-    private BigDecimal mapRate(Long userLevel, ResolvedPolicy policy) {
+    private BigDecimal mapRate(Long userLevel, SideRates sideRates) {
         if (userLevel == null) {
-            return policy.level0Rate();
+            return sideRates.level0Rate();
         }
-
-        return switch (userLevel.intValue()) {
-            case 0 -> policy.level0Rate();
-            case 1 -> policy.level1Rate();
-            case 2 -> policy.level2Rate();
-            default -> policy.level3PlusRate();
-        };
+        return sideRates.rateFor(normalizeLevelBucket(userLevel));
     }
 
     private long normalizeLevelBucket(Long level) {
@@ -135,91 +171,201 @@ public class FeePolicyService {
         return Math.min(level, 3L);
     }
 
+    private PolicySide normalizeSide(String rawSide) {
+        if (rawSide == null || rawSide.isBlank()) {
+            return PolicySide.SHIPPER;
+        }
+
+        return switch (rawSide.trim().toUpperCase(Locale.ROOT)) {
+            case "SHIPPER" -> PolicySide.SHIPPER;
+            case "DRIVER" -> PolicySide.DRIVER;
+            default -> throw new IllegalArgumentException("side must be shipper or driver");
+        };
+    }
+
     private ResolvedPolicy resolvePolicy() {
         FeePolicyConfig config = feePolicyConfigRepository.findTopByOrderByPolicyIdDesc().orElse(null);
         if (config == null) {
-            return new ResolvedPolicy(
-                    DEFAULT_LEVEL0_RATE,
-                    DEFAULT_LEVEL1_RATE,
-                    DEFAULT_LEVEL2_RATE,
-                    DEFAULT_LEVEL3_PLUS_RATE,
-                    DEFAULT_FIRST_PAYMENT_PROMO_RATE,
-                    DEFAULT_MIN_FEE,
-                    null
-            );
+            return defaultPolicy();
         }
 
         return new ResolvedPolicy(
-                nullSafeRate(config.getLevel0Rate(), DEFAULT_LEVEL0_RATE),
-                nullSafeRate(config.getLevel1Rate(), DEFAULT_LEVEL1_RATE),
-                nullSafeRate(config.getLevel2Rate(), DEFAULT_LEVEL2_RATE),
-                nullSafeRate(config.getLevel3PlusRate(), DEFAULT_LEVEL3_PLUS_RATE),
-                nullSafeRate(config.getFirstPaymentPromoRate(), DEFAULT_FIRST_PAYMENT_PROMO_RATE),
+                resolveShipperSide(config),
+                resolveDriverSide(config),
+                nullSafeRate(
+                        firstNonNull(config.getShipperFirstPaymentPromoRate(), config.getFirstPaymentPromoRate()),
+                        DEFAULT_SHIPPER_FIRST_PAYMENT_PROMO_RATE
+                ),
+                nullSafeRate(config.getDriverFirstTransportPromoRate(), DEFAULT_DRIVER_FIRST_TRANSPORT_PROMO_RATE),
+                nullSafeRate(config.getTossRate(), DEFAULT_TOSS_RATE),
                 nullSafeMinFee(config.getMinFee()),
+                config.getPolicyId(),
                 config.getCreatedAt()
         );
     }
 
     private ResolvedPolicy toResolvedPolicy(FeePolicyConfig config) {
         return new ResolvedPolicy(
-                nullSafeRate(config.getLevel0Rate(), DEFAULT_LEVEL0_RATE),
-                nullSafeRate(config.getLevel1Rate(), DEFAULT_LEVEL1_RATE),
-                nullSafeRate(config.getLevel2Rate(), DEFAULT_LEVEL2_RATE),
-                nullSafeRate(config.getLevel3PlusRate(), DEFAULT_LEVEL3_PLUS_RATE),
-                nullSafeRate(config.getFirstPaymentPromoRate(), DEFAULT_FIRST_PAYMENT_PROMO_RATE),
+                resolveShipperSide(config),
+                resolveDriverSide(config),
+                nullSafeRate(
+                        firstNonNull(config.getShipperFirstPaymentPromoRate(), config.getFirstPaymentPromoRate()),
+                        DEFAULT_SHIPPER_FIRST_PAYMENT_PROMO_RATE
+                ),
+                nullSafeRate(config.getDriverFirstTransportPromoRate(), DEFAULT_DRIVER_FIRST_TRANSPORT_PROMO_RATE),
+                nullSafeRate(config.getTossRate(), DEFAULT_TOSS_RATE),
                 nullSafeMinFee(config.getMinFee()),
+                config.getPolicyId(),
                 config.getCreatedAt()
+        );
+    }
+
+    private ResolvedPolicy defaultPolicy() {
+        return new ResolvedPolicy(
+                DEFAULT_SHIPPER_SIDE_RATES,
+                DEFAULT_DRIVER_SIDE_RATES,
+                DEFAULT_SHIPPER_FIRST_PAYMENT_PROMO_RATE,
+                DEFAULT_DRIVER_FIRST_TRANSPORT_PROMO_RATE,
+                DEFAULT_TOSS_RATE,
+                DEFAULT_MIN_FEE,
+                0L,
+                null
+        );
+    }
+
+    private SideRates resolveShipperSide(FeePolicyConfig config) {
+        return new SideRates(
+                nullSafeRate(firstNonNull(config.getShipperLevel0Rate(), config.getLevel0Rate()), DEFAULT_SHIPPER_SIDE_RATES.level0Rate()),
+                nullSafeRate(firstNonNull(config.getShipperLevel1Rate(), config.getLevel1Rate()), DEFAULT_SHIPPER_SIDE_RATES.level1Rate()),
+                nullSafeRate(firstNonNull(config.getShipperLevel2Rate(), config.getLevel2Rate()), DEFAULT_SHIPPER_SIDE_RATES.level2Rate()),
+                nullSafeRate(firstNonNull(config.getShipperLevel3PlusRate(), config.getLevel3PlusRate()), DEFAULT_SHIPPER_SIDE_RATES.level3PlusRate())
+        );
+    }
+
+    private SideRates resolveDriverSide(FeePolicyConfig config) {
+        return new SideRates(
+                nullSafeRate(config.getDriverLevel0Rate(), DEFAULT_DRIVER_SIDE_RATES.level0Rate()),
+                nullSafeRate(config.getDriverLevel1Rate(), DEFAULT_DRIVER_SIDE_RATES.level1Rate()),
+                nullSafeRate(config.getDriverLevel2Rate(), DEFAULT_DRIVER_SIDE_RATES.level2Rate()),
+                nullSafeRate(config.getDriverLevel3PlusRate(), DEFAULT_DRIVER_SIDE_RATES.level3PlusRate())
+        );
+    }
+
+    private SideRates mergeShipperSide(SideRates current, UpdateFeePolicyRequest request) {
+        FeePolicySideRequest shipperSide = request.getShipperSide();
+        return new SideRates(
+                mergeRate(shipperSide != null ? shipperSide.getLevel0Rate() : null, request.getLevel0Rate(), current.level0Rate(), "shipperSide.level0Rate"),
+                mergeRate(shipperSide != null ? shipperSide.getLevel1Rate() : null, request.getLevel1Rate(), current.level1Rate(), "shipperSide.level1Rate"),
+                mergeRate(shipperSide != null ? shipperSide.getLevel2Rate() : null, request.getLevel2Rate(), current.level2Rate(), "shipperSide.level2Rate"),
+                mergeRate(shipperSide != null ? shipperSide.getLevel3PlusRate() : null, request.getLevel3PlusRate(), current.level3PlusRate(), "shipperSide.level3PlusRate")
+        );
+    }
+
+    private SideRates mergeDriverSide(SideRates current, FeePolicySideRequest request) {
+        return new SideRates(
+                mergeRate(request != null ? request.getLevel0Rate() : null, null, current.level0Rate(), "driverSide.level0Rate"),
+                mergeRate(request != null ? request.getLevel1Rate() : null, null, current.level1Rate(), "driverSide.level1Rate"),
+                mergeRate(request != null ? request.getLevel2Rate() : null, null, current.level2Rate(), "driverSide.level2Rate"),
+                mergeRate(request != null ? request.getLevel3PlusRate() : null, null, current.level3PlusRate(), "driverSide.level3PlusRate")
+        );
+    }
+
+    private BigDecimal mergeRate(BigDecimal primaryValue, BigDecimal fallbackValue, BigDecimal currentValue, String fieldName) {
+        BigDecimal candidate = firstNonNull(primaryValue, fallbackValue);
+        if (candidate == null) {
+            return currentValue;
+        }
+        return normalizeRate(candidate, fieldName);
+    }
+
+    private BigDecimal mergeMinFee(BigDecimal requestedValue, BigDecimal currentValue) {
+        if (requestedValue == null) {
+            return currentValue;
+        }
+        return normalizeMinFee(requestedValue);
+    }
+
+    private FeePolicyConfig savePolicy(ResolvedPolicy policy) {
+        return feePolicyConfigRepository.save(
+                FeePolicyConfig.builder()
+                        .level0Rate(policy.shipperSide().level0Rate())
+                        .level1Rate(policy.shipperSide().level1Rate())
+                        .level2Rate(policy.shipperSide().level2Rate())
+                        .level3PlusRate(policy.shipperSide().level3PlusRate())
+                        .firstPaymentPromoRate(policy.shipperFirstPaymentPromoRate())
+                        .shipperLevel0Rate(policy.shipperSide().level0Rate())
+                        .shipperLevel1Rate(policy.shipperSide().level1Rate())
+                        .shipperLevel2Rate(policy.shipperSide().level2Rate())
+                        .shipperLevel3PlusRate(policy.shipperSide().level3PlusRate())
+                        .driverLevel0Rate(policy.driverSide().level0Rate())
+                        .driverLevel1Rate(policy.driverSide().level1Rate())
+                        .driverLevel2Rate(policy.driverSide().level2Rate())
+                        .driverLevel3PlusRate(policy.driverSide().level3PlusRate())
+                        .shipperFirstPaymentPromoRate(policy.shipperFirstPaymentPromoRate())
+                        .driverFirstTransportPromoRate(policy.driverFirstTransportPromoRate())
+                        .tossRate(policy.tossRate())
+                        .minFee(policy.minFee())
+                        .build()
         );
     }
 
     private FeePolicyResponse toPolicyResponse(ResolvedPolicy policy) {
         return FeePolicyResponse.builder()
-                .level0Rate(policy.level0Rate())
-                .level1Rate(policy.level1Rate())
-                .level2Rate(policy.level2Rate())
-                .level3PlusRate(policy.level3PlusRate())
-                .firstPaymentPromoRate(policy.firstPaymentPromoRate())
+                .policyConfigId(policy.policyId())
+                .level0Rate(policy.shipperSide().level0Rate())
+                .level1Rate(policy.shipperSide().level1Rate())
+                .level2Rate(policy.shipperSide().level2Rate())
+                .level3PlusRate(policy.shipperSide().level3PlusRate())
+                .firstPaymentPromoRate(policy.shipperFirstPaymentPromoRate())
+                .shipperSide(toSideResponse(policy.shipperSide()))
+                .driverSide(toSideResponse(policy.driverSide()))
+                .shipperFirstPaymentPromoRate(policy.shipperFirstPaymentPromoRate())
+                .driverFirstTransportPromoRate(policy.driverFirstTransportPromoRate())
+                .tossRate(policy.tossRate())
                 .minFee(policy.minFee())
                 .updatedAt(policy.updatedAt())
                 .build();
     }
 
-    private FeePolicyResponse toPolicyResponse(FeePolicyConfig config) {
-        return FeePolicyResponse.builder()
-                .level0Rate(config.getLevel0Rate())
-                .level1Rate(config.getLevel1Rate())
-                .level2Rate(config.getLevel2Rate())
-                .level3PlusRate(config.getLevel3PlusRate())
-                .firstPaymentPromoRate(config.getFirstPaymentPromoRate())
-                .minFee(config.getMinFee())
-                .updatedAt(config.getCreatedAt())
+    private FeePolicySideResponse toSideResponse(SideRates sideRates) {
+        return FeePolicySideResponse.builder()
+                .level0Rate(sideRates.level0Rate())
+                .level1Rate(sideRates.level1Rate())
+                .level2Rate(sideRates.level2Rate())
+                .level3PlusRate(sideRates.level3PlusRate())
                 .build();
     }
 
-    private LevelFeePolicyResponse toLevelResponse(Long requestedLevel, ResolvedPolicy policy) {
+    private LevelFeePolicyResponse toLevelResponse(Long requestedLevel, PolicySide side, ResolvedPolicy policy) {
         long appliedLevel = normalizeLevelBucket(requestedLevel);
-        BigDecimal rate = switch ((int) appliedLevel) {
-            case 0 -> policy.level0Rate();
-            case 1 -> policy.level1Rate();
-            case 2 -> policy.level2Rate();
-            default -> policy.level3PlusRate();
-        };
+        BigDecimal shipperRate = policy.shipperSide().rateFor(appliedLevel);
+        BigDecimal driverRate = policy.driverSide().rateFor(appliedLevel);
 
         return LevelFeePolicyResponse.builder()
                 .requestedLevel(requestedLevel)
                 .appliedLevel(appliedLevel)
-                .rate(rate)
-                .firstPaymentPromoRate(policy.firstPaymentPromoRate())
+                .side(side.apiName())
+                .rate(shipperRate)
+                .firstPaymentPromoRate(policy.shipperFirstPaymentPromoRate())
+                .shipperRate(shipperRate)
+                .driverRate(driverRate)
+                .shipperFirstPaymentPromoRate(policy.shipperFirstPaymentPromoRate())
+                .driverFirstTransportPromoRate(policy.driverFirstTransportPromoRate())
+                .tossRate(policy.tossRate())
                 .minFee(policy.minFee())
                 .updatedAt(policy.updatedAt())
                 .build();
+    }
+
+    private BigDecimal firstNonNull(BigDecimal primary, BigDecimal fallback) {
+        return primary != null ? primary : fallback;
     }
 
     private BigDecimal nullSafeRate(BigDecimal value, BigDecimal defaultValue) {
         if (value == null || value.compareTo(BigDecimal.ZERO) < 0 || value.compareTo(BigDecimal.ONE) > 0) {
             return defaultValue;
         }
-        return value;
+        return value.setScale(4, RoundingMode.HALF_UP);
     }
 
     private BigDecimal nullSafeMinFee(BigDecimal value) {
@@ -250,13 +396,48 @@ public class FeePolicyService {
     }
 
     private record ResolvedPolicy(
+            SideRates shipperSide,
+            SideRates driverSide,
+            BigDecimal shipperFirstPaymentPromoRate,
+            BigDecimal driverFirstTransportPromoRate,
+            BigDecimal tossRate,
+            BigDecimal minFee,
+            Long policyId,
+            LocalDateTime updatedAt
+    ) {
+    }
+
+    private record SideRates(
             BigDecimal level0Rate,
             BigDecimal level1Rate,
             BigDecimal level2Rate,
-            BigDecimal level3PlusRate,
-            BigDecimal firstPaymentPromoRate,
-            BigDecimal minFee,
-            LocalDateTime updatedAt
+            BigDecimal level3PlusRate
     ) {
+        private BigDecimal rateFor(long level) {
+            return switch ((int) level) {
+                case 0 -> level0Rate;
+                case 1 -> level1Rate;
+                case 2 -> level2Rate;
+                default -> level3PlusRate;
+            };
+        }
+
+        private SideRates withRate(long level, BigDecimal updatedRate) {
+            return switch ((int) level) {
+                case 0 -> new SideRates(updatedRate, level1Rate, level2Rate, level3PlusRate);
+                case 1 -> new SideRates(level0Rate, updatedRate, level2Rate, level3PlusRate);
+                case 2 -> new SideRates(level0Rate, level1Rate, updatedRate, level3PlusRate);
+                default -> new SideRates(level0Rate, level1Rate, level2Rate, updatedRate);
+            };
+        }
+    }
+
+    private enum PolicySide {
+        SHIPPER,
+        DRIVER;
+
+        private String apiName() {
+            return name().toLowerCase(Locale.ROOT);
+        }
     }
 }

@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -32,6 +31,7 @@ public class DriverPayoutService {
     private final DriverPayoutGatewayClient payoutGatewayClient;
     private final EntityManager entityManager;
     private final TossPayoutWebhookService tossPayoutWebhookService;
+    private final PromotionEligibilityService promotionEligibilityService;
 
     @Scheduled(cron = "${payment.payout.cron:0 0 4 * * *}")
     @Transactional
@@ -90,9 +90,7 @@ public class DriverPayoutService {
                 continue;
             }
 
-            DriverPayoutItem item = itemRepository.save(
-                    DriverPayoutItem.ready(batch, payment.getOrderId(), payment.getDriverUserId(), payment.getNetAmountSnapshot())
-            );
+            DriverPayoutItem item = itemRepository.save(createReadyItem(batch, payment));
             processItem(item);
         }
         tossPayoutWebhookService.refreshBatchStatus(batch);
@@ -115,9 +113,7 @@ public class DriverPayoutService {
         }
 
         DriverPayoutBatch batch = findOrCreateBatch(LocalDate.now());
-        DriverPayoutItem item = itemRepository.save(
-                DriverPayoutItem.ready(batch, payment.getOrderId(), payment.getDriverUserId(), payment.getNetAmountSnapshot())
-        );
+        DriverPayoutItem item = itemRepository.save(createReadyItem(batch, payment));
         return processItem(item);
     }
 
@@ -260,6 +256,12 @@ public class DriverPayoutService {
     private DriverPayoutBatch findOrCreateBatch(LocalDate payoutDate) {
         return batchRepository.findByBatchDate(payoutDate)
                 .orElseGet(() -> batchRepository.save(DriverPayoutBatch.start(payoutDate)));
+    }
+
+    private DriverPayoutItem createReadyItem(DriverPayoutBatch batch, TransportPayment payment) {
+        DriverPayoutItem item = DriverPayoutItem.ready(batch, payment);
+        promotionEligibilityService.applyDriverFirstTransportPromotion(item);
+        return item;
     }
 
     private void validateManualPayoutEligibility(TransportPayment payment) {
