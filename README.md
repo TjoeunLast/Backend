@@ -8,18 +8,18 @@
 
 <table>
   <tr>
-    <td align="center"><img src="assets/icons/java.svg" alt="Java" width="52" height="52"><br><strong>Java 17</strong></td>
-    <td align="center"><img src="assets/icons/springboot.svg" alt="Spring Boot" width="52" height="52"><br><strong>Spring Boot 3.3.5</strong></td>
-    <td align="center"><img src="assets/icons/springsecurity.svg" alt="Spring Security" width="52" height="52"><br><strong>Spring Security</strong></td>
-    <td align="center"><img src="assets/icons/oracle.svg" alt="Oracle Database" width="52" height="52"><br><strong>Oracle</strong></td>
-    <td align="center"><img src="assets/icons/websocket.svg" alt="WebSocket" width="52" height="52"><br><strong>WebSocket</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/java.svg" alt="Java" width="52" height="52"><br><strong>Java 17</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/springboot.svg" alt="Spring Boot" width="52" height="52"><br><strong>Spring Boot 3.3.5</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/springsecurity.svg" alt="Spring Security" width="52" height="52"><br><strong>Spring Security</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/oracle.svg" alt="Oracle Database" width="52" height="52"><br><strong>Oracle</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/websocket.svg" alt="WebSocket" width="52" height="52"><br><strong>WebSocket</strong></td>
   </tr>
   <tr>
-    <td align="center"><img src="assets/icons/awss3.svg" alt="AWS S3" width="52" height="52"><br><strong>AWS S3</strong></td>
-    <td align="center"><img src="assets/icons/firebase.svg" alt="Firebase" width="52" height="52"><br><strong>Firebase</strong></td>
-    <td align="center"><img src="assets/icons/swagger.svg" alt="Swagger" width="52" height="52"><br><strong>Swagger</strong></td>
-    <td align="center"><img src="assets/icons/jwt.svg" alt="JWT" width="52" height="52"><br><strong>JWT</strong></td>
-    <td align="center"><img src="assets/icons/google.svg" alt="Google" width="52" height="52"><br><strong>Google APIs</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/awss3.svg" alt="AWS S3" width="52" height="52"><br><strong>AWS S3</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/firebase.svg" alt="Firebase" width="52" height="52"><br><strong>Firebase</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/swagger.svg" alt="Swagger" width="52" height="52"><br><strong>Swagger</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/jwt.svg" alt="JWT" width="52" height="52"><br><strong>JWT</strong></td>
+    <td align="center"><img src="Barotruck/assets/icons/google.svg" alt="Google" width="52" height="52"><br><strong>Google APIs</strong></td>
   </tr>
 </table>
 
