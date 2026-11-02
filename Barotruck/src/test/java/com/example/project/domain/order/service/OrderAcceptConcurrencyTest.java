@@ -1,7 +1,14 @@
 package com.example.project.domain.order.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
+import java.util.List;
 
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -44,6 +51,11 @@ class OrderAcceptConcurrencyTest {
 
     private static final int DRIVER_COUNT = 50;
 
+    // 늦게 수락한 기사가 받을 수 있는 안내 문구: 커밋 충돌 / 이미 배차된 주문을 읽은 경우
+    private static final List<String> LOST_RACE_MESSAGES = List.of(
+            "아쉽게도 방금 다른 차주님이 배차를 수락하셨습니다.",
+            "이미 배차가 완료되었거나 취소된 오더입니다.");
+
     @Autowired
     private OrderService orderService;
 
@@ -84,6 +96,36 @@ class OrderAcceptConcurrencyTest {
     void 바로배차_동시_수락은_한_명만_성공한다() throws Exception {
         Long orderId = saveInstantOrder();
 
+        RaceResult result = raceAccepts(orderId);
+
+        assertThat(result.acceptedDrivers()).hasSize(1);
+        assertThat(result.rejections()).hasSize(DRIVER_COUNT - 1);
+
+        Order saved = orderRepository.findById(orderId).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo("ACCEPTED");
+        assertThat(saved.getDriverNo()).isEqualTo(result.acceptedDrivers().peek());
+    }
+
+    @Test
+    void 충돌로_밀린_기사는_안내_메시지를_받고_배차_후속처리는_한_번만_일어난다() throws Exception {
+        Long orderId = saveInstantOrder();
+
+        RaceResult result = raceAccepts(orderId);
+
+        Long winner = result.acceptedDrivers().peek();
+        verify(notificationService, times(1))
+                .sendNotification(any(Users.class), eq("ORDER"), eq("배차 완료"), anyString(), eq(orderId));
+        verify(dispatchAvailabilityService, times(1)).markMatched(anyLong(), anyLong(), anyString());
+        verify(dispatchAvailabilityService).markMatched(eq(winner), eq(orderId), eq("ACCEPTED"));
+
+        assertThat(result.rejections())
+                .allSatisfy(e -> {
+                    assertThat(e).isExactlyInstanceOf(RuntimeException.class);
+                    assertThat(e.getMessage()).isIn(LOST_RACE_MESSAGES);
+                });
+    }
+
+    private RaceResult raceAccepts(Long orderId) throws InterruptedException {
         Queue<Long> acceptedDrivers = new ConcurrentLinkedQueue<>();
         Queue<Throwable> rejections = new ConcurrentLinkedQueue<>();
         CountDownLatch ready = new CountDownLatch(DRIVER_COUNT);
@@ -110,13 +152,10 @@ class OrderAcceptConcurrencyTest {
         assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
 
         printSummary(acceptedDrivers, rejections);
+        return new RaceResult(acceptedDrivers, rejections);
+    }
 
-        assertThat(acceptedDrivers).hasSize(1);
-        assertThat(rejections).hasSize(DRIVER_COUNT - 1);
-
-        Order saved = orderRepository.findById(orderId).orElseThrow();
-        assertThat(saved.getStatus()).isEqualTo("ACCEPTED");
-        assertThat(saved.getDriverNo()).isEqualTo(acceptedDrivers.peek());
+    private record RaceResult(Queue<Long> acceptedDrivers, Queue<Throwable> rejections) {
     }
 
     private Long saveInstantOrder() {
