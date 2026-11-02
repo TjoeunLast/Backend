@@ -108,7 +108,9 @@ public class OrderService {
         try {
             if (order.getSnapshot().isInstant()) {
                 order.assignDriver(driverNo, "ACCEPTED");
-                orderRepository.save(order);
+                // 버전 충돌을 커밋이 아닌 여기서 드러내야 아래 catch가 잡고,
+                // 밀린 기사가 자동배차 종료·매칭·알림을 일으키지 않는다
+                orderRepository.saveAndFlush(order);
                 cancelActiveDispatchSafely(order.getOrderId(), "manual_driver_accept");
                 markDriverMatchedSafely(driverNo, order.getOrderId(), order.getStatus());
                 // [추가] 오더에 배차 완료 알림 발송 (화주에게)
