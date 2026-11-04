@@ -1,0 +1,56 @@
+name: 개선
+description: 보안·성능·리팩터링·테스트·CI·문서 개선을 현재 상태와 완료 조건과 함께 남깁니다.
+title: "[개선] "
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 종류
+      description: 이슈를 만든 뒤 같은 이름의 라벨(security, perf, refactor, test, ci, documentation)을 붙여 주세요.
+      options:
+        - 보안 (security)
+        - 성능 (perf)
+        - 리팩터링 (refactor)
+        - 테스트 (test)
+        - CI (ci)
+        - 문서 (documentation)
+        - 기능 개선 (enhancement)
+    validations:
+      required: true
+  - type: textarea
+    id: now
+    attributes:
+      label: 현재 상태와 근거
+      description: 지금 어떤 상태인지, 어느 파일·측정값에서 확인했는지 적어 주세요. 보안 문제는 공격 방법을 적지 마세요.
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 목표
+    validations:
+      required: true
+  - type: textarea
+    id: measure
+    attributes:
+      label: 측정 방법
+      description: 성능·품질 개선이면 수정 전후를 무엇으로 비교할지 적어 주세요. 측정 환경(DB 종류, 데이터 양)도 함께.
+  - type: textarea
+    id: done
+    attributes:
+      label: 완료 조건
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 우선순위
+      options:
+        - P0 (지원·배포 전 반드시)
+        - P1 (2주 안에)
+        - P2 (수치가 남는 개선)
+        - P3 (여유 있을 때)
+    validations:
+      required: true

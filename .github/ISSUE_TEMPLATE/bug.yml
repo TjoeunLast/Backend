@@ -1,0 +1,57 @@
+name: 버그
+description: 기대와 다르게 동작하는 문제를 재현 방법과 함께 남깁니다.
+title: "[버그] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 문제
+      description: 무엇이 잘못됐는지 한두 문장으로 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 방법
+      description: 요청·데이터·순서, 또는 실패하는 테스트 이름을 적어 주세요.
+      placeholder: |
+        1. 바로배차 주문을 하나 만든다
+        2. 기사 50명이 동시에 수락한다
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: 기대 결과와 실제 결과
+      placeholder: |
+        기대: 1명만 성공
+        실제: 50명 모두 성공 응답
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 근거
+      description: 관련 파일·로그·측정값 (비밀값과 개인정보는 빼고)
+  - type: textarea
+    id: done
+    attributes:
+      label: 완료 조건
+      description: 어떤 테스트나 측정이 통과하면 끝인지 적어 주세요.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 우선순위
+      options:
+        - P0 (지원·배포 전 반드시)
+        - P1 (2주 안에)
+        - P2 (수치가 남는 개선)
+        - P3 (여유 있을 때)
+    validations:
+      required: true
