@@ -75,6 +75,8 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // 동시성 테스트용 인메모리 DB
+    testRuntimeOnly 'com.h2database:h2'
     
     // 2. JWT (JJWT) - 0.11.5
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
